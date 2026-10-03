@@ -48,6 +48,7 @@ class _DashboardPageState extends State<DashboardPage> {
                       title: 'Search Catalogue',
                       subtitle: 'Browse 50,000+ volumes',
                       color: _DashboardColors.primary,
+                      onTap: () => Navigator.pushNamed(context, AppRoutes.catalogue),
                     ),
                   ),
                   const SizedBox(width: 12),
@@ -121,6 +122,10 @@ class _DashboardPageState extends State<DashboardPage> {
   }
 
   void _handleNavigation(int index) {
+    if (index == 1) {
+      Navigator.pushNamed(context, AppRoutes.catalogue);
+      return;
+    }
     if (index == 3) {
       Navigator.pushNamed(
         context,
@@ -370,29 +375,34 @@ class _QuickActionCard extends StatelessWidget {
     required this.title,
     required this.subtitle,
     required this.color,
+    this.onTap,
   });
 
   final IconData icon;
   final String title;
   final String subtitle;
   final Color color;
+  final VoidCallback? onTap;
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      height: 132,
-      padding: const EdgeInsets.all(15),
-      decoration: BoxDecoration(
-        color: color,
-        borderRadius: BorderRadius.circular(18),
-        boxShadow: [
-          BoxShadow(
-            color: color.withValues(alpha: 0.18),
-            blurRadius: 12,
-            offset: const Offset(0, 5),
-          ),
-        ],
-      ),
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(18),
+      child: Container(
+        height: 132,
+        padding: const EdgeInsets.all(15),
+        decoration: BoxDecoration(
+          color: color,
+          borderRadius: BorderRadius.circular(18),
+          boxShadow: [
+            BoxShadow(
+              color: color.withValues(alpha: 0.18),
+              blurRadius: 12,
+              offset: const Offset(0, 5),
+            ),
+          ],
+        ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -424,6 +434,7 @@ class _QuickActionCard extends StatelessWidget {
             ],
           ),
         ],
+      ),
       ),
     );
   }

@@ -4,9 +4,13 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:read_space/pages/admin_dashboard_screen.dart';
 import 'package:read_space/pages/admin_notices_screen.dart';
+import 'package:read_space/pages/book_detail_screen.dart';
+import 'package:read_space/pages/catalogue_screen.dart';
 import 'package:read_space/pages/dashboard_page.dart';
 import 'package:read_space/pages/edit_notice_screen.dart';
 import 'package:read_space/pages/edit_profile_page.dart';
+import 'package:read_space/pages/hold_request_screen.dart';
+import 'package:read_space/pages/holds_screen.dart';
 import 'package:read_space/pages/member_profile_page.dart';
 import 'package:read_space/pages/notice_details_screen.dart';
 import 'package:read_space/pages/notifications_screen.dart';
@@ -35,6 +39,10 @@ class AppRoutes {
   static const payLibraryFine = '/pay-library-fine';
   static const transactionDetails = '/transaction-details';
   static const librarianLogin = '/librarian-login';
+  static const catalogue = '/catalogue';
+  static const bookDetail = '/book-detail';
+  static const holdRequest = '/hold-request';
+  static const holds = '/holds';
 }
 
 class AppTheme {
@@ -114,6 +122,8 @@ class ReadSpaceApp extends StatelessWidget {
         AppRoutes.notifications: (_) => const NotificationsScreen(),
         AppRoutes.payLibraryFine: (_) => const PayLibraryFineScreen(),
         AppRoutes.librarianLogin: (_) => const LibrarianLoginScreen(),
+        AppRoutes.catalogue: (_) => const CatalogueScreen(),
+        AppRoutes.holds: (_) => const HoldsScreen(),
       },
       onGenerateRoute: (settings) {
         if (settings.name == AppRoutes.editProfile) {
@@ -192,6 +202,52 @@ class ReadSpaceApp extends StatelessWidget {
           return PageRouteBuilder<void>(
             settings: settings,
             pageBuilder: (_, animation, _) => const TransactionDetailsScreen(),
+            transitionsBuilder: (_, animation, _, child) {
+              final curved = CurvedAnimation(
+                parent: animation,
+                curve: Curves.easeOutCubic,
+              );
+              return FadeTransition(
+                opacity: curved,
+                child: SlideTransition(
+                  position: Tween<Offset>(
+                    begin: const Offset(0.04, 0),
+                    end: Offset.zero,
+                  ).animate(curved),
+                  child: child,
+                ),
+              );
+            },
+          );
+        }
+        if (settings.name == AppRoutes.bookDetail) {
+          final bookId = settings.arguments as String?;
+          return PageRouteBuilder<void>(
+            settings: settings,
+            pageBuilder: (_, animation, _) => BookDetailScreen(bookId: bookId ?? ''),
+            transitionsBuilder: (_, animation, _, child) {
+              final curved = CurvedAnimation(
+                parent: animation,
+                curve: Curves.easeOutCubic,
+              );
+              return FadeTransition(
+                opacity: curved,
+                child: SlideTransition(
+                  position: Tween<Offset>(
+                    begin: const Offset(0.04, 0),
+                    end: Offset.zero,
+                  ).animate(curved),
+                  child: child,
+                ),
+              );
+            },
+          );
+        }
+        if (settings.name == AppRoutes.holdRequest) {
+          final bookId = settings.arguments as String?;
+          return PageRouteBuilder<void>(
+            settings: settings,
+            pageBuilder: (_, animation, _) => HoldRequestScreen(bookId: bookId ?? ''),
             transitionsBuilder: (_, animation, _, child) {
               final curved = CurvedAnimation(
                 parent: animation,
