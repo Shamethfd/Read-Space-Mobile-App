@@ -5,6 +5,7 @@ import '../main.dart' show AppRoutes;
 import '../widgets/library_bottom_navigation.dart';
 import '../widgets/notification_badge.dart';
 import '../services/notification_service.dart';
+import 'member_profile_page.dart';
 
 class DashboardPage extends StatefulWidget {
   const DashboardPage({super.key});
@@ -121,7 +122,38 @@ class _DashboardPageState extends State<DashboardPage> {
 
   void _handleNavigation(int index) {
     if (index == 3) {
-      Navigator.pushNamed(context, AppRoutes.profile);
+      Navigator.pushNamed(
+        context,
+        AppRoutes.profile,
+        arguments: const MemberProfileData(
+          fullName: 'Fernando K S R',
+          memberId: 'IT23624344',
+          phoneNumber: '+94 71 234 5678',
+          universityEmail: 'fernando@uni.ac.lk',
+          facultyDepartment: 'Faculty of Computing',
+          outstandingFines: 150.00,
+          borrowingHistory: [
+            BorrowedBook(
+              title: 'Design Patterns',
+              author: 'E. Gamma, R. Helm, R. Johnson',
+              status: BorrowingStatus.active,
+              dateLabel: 'Today, 05:00 PM',
+            ),
+            BorrowedBook(
+              title: 'Data Structures & Algorithms',
+              author: 'Michael T. Goodrich',
+              status: BorrowingStatus.overdue,
+              dateLabel: '15 Oct 2025',
+            ),
+            BorrowedBook(
+              title: 'Clean Code',
+              author: 'Robert C. Martin',
+              status: BorrowingStatus.returned,
+              dateLabel: 'Returned: 08 Oct 2025',
+            ),
+          ],
+        ),
+      );
       return;
     }
     setState(() => _selectedNavigationIndex = index);

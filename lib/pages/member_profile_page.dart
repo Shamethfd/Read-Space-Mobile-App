@@ -418,16 +418,17 @@ class _FinesCard extends StatelessWidget {
               color: theme.colorScheme.onSurfaceVariant,
             ),
           ),
-          if (hasBalance) ...[
-            const SizedBox(height: 16),
-            SizedBox(
-              width: double.infinity,
-              child: FilledButton(
-                onPressed: onPayOnline,
-                child: const Text('Pay Online'),
+          const SizedBox(height: 16),
+          SizedBox(
+            width: double.infinity,
+            child: FilledButton(
+              onPressed: onPayOnline,
+              style: FilledButton.styleFrom(
+                backgroundColor: hasBalance ? null : theme.colorScheme.primary.withValues(alpha: 0.5),
               ),
+              child: Text(hasBalance ? 'Pay Online' : 'View Payment History'),
             ),
-          ],
+          ),
         ],
       ),
     );
