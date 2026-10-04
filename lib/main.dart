@@ -1,5 +1,7 @@
 import 'dart:async';
 
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
@@ -12,12 +14,18 @@ import 'package:read_space/pages/admin_notices_screen.dart';
 import 'package:read_space/pages/appeal_details_screen.dart';
 import 'package:read_space/pages/book_detail_screen.dart';
 import 'package:read_space/pages/catalogue_screen.dart';
+import 'package:read_space/pages/create_librarian_screen.dart';
 import 'package:read_space/pages/dashboard_page.dart';
 import 'package:read_space/pages/edit_notice_screen.dart';
 import 'package:read_space/pages/edit_profile_page.dart';
 import 'package:read_space/pages/fine_appeals_screen.dart';
 import 'package:read_space/pages/hold_request_screen.dart';
 import 'package:read_space/pages/holds_screen.dart';
+import 'package:read_space/pages/librarian_add_book_screen.dart';
+import 'package:read_space/pages/librarian_dashboard_screen.dart';
+import 'package:read_space/pages/librarian_inventory_screen.dart';
+import 'package:read_space/pages/librarian_login_screen.dart';
+import 'package:read_space/pages/librarian_profile_screen.dart';
 import 'package:read_space/pages/member_profile_page.dart';
 import 'package:read_space/pages/notice_details_screen.dart';
 import 'package:read_space/pages/notifications_screen.dart';
@@ -54,6 +62,11 @@ class AppRoutes {
   static const payLibraryFine = '/pay-library-fine';
   static const transactionDetails = '/transaction-details';
   static const librarianLogin = '/librarian-login';
+  static const librarianDashboard = '/librarian-dashboard';
+  static const librarianProfile = '/librarian-profile';
+  static const librarianInventory = '/librarian-inventory';
+  static const librarianAddBook = '/librarian-add-book';
+  static const createLibrarian = '/create-librarian';
   static const catalogue = '/catalogue';
   static const bookDetail = '/book-detail';
   static const holdRequest = '/hold-request';
@@ -142,6 +155,11 @@ class ReadSpaceApp extends StatelessWidget {
         AppRoutes.notifications: (_) => const NotificationsScreen(),
         AppRoutes.payLibraryFine: (_) => const PayLibraryFineScreen(),
         AppRoutes.librarianLogin: (_) => const LibrarianLoginScreen(),
+        AppRoutes.librarianDashboard: (_) => const LibrarianDashboardScreen(),
+        AppRoutes.librarianProfile: (_) => const LibrarianProfileScreen(),
+        AppRoutes.librarianInventory: (_) => const LibrarianInventoryScreen(),
+        AppRoutes.librarianAddBook: (_) => const LibrarianAddBookScreen(),
+        AppRoutes.createLibrarian: (_) => const CreateLibrarianScreen(),
         AppRoutes.catalogue: (_) => const CatalogueScreen(),
         AppRoutes.holds: (_) => const HoldsScreen(),
         AppRoutes.fineAppeals: (_) => const FineAppealsScreen(),
@@ -1020,10 +1038,52 @@ class _LoginScreenState extends State<LoginScreen> {
           email: _emailController.text.trim(),
           password: _passwordController.text,
         );
-        if (mounted) {
-          Navigator.pushReplacementNamed(context, AppRoutes.dashboard);
+        
+        print('✅ Login successful');
+        
+        // Check user role and redirect accordingly
+        final user = FirebaseAuth.instance.currentUser;
+        if (user != null) {
+          print('👤 User UID: ${user.uid}');
+          
+          final userDoc = await FirebaseFirestore.instance
+              .collection('users')
+              .doc(user.uid)
+              .get();
+          
+          print('📄 User doc exists: ${userDoc.exists}');
+          
+          if (userDoc.exists) {
+            final userData = userDoc.data() as Map<String, dynamic>;
+            final role = userData['role'];
+            print('👤 User role: $role');
+            
+            if (mounted) {
+              if (role == 'librarian') {
+                print('🚀 Navigating to Librarian Dashboard');
+                Navigator.pushReplacementNamed(context, AppRoutes.librarianDashboard);
+              } else if (role == 'admin') {
+                print('🚀 Navigating to Admin Dashboard');
+                Navigator.pushReplacementNamed(context, AppRoutes.adminDashboard);
+              } else {
+                print('🚀 Navigating to User Dashboard');
+                Navigator.pushReplacementNamed(context, AppRoutes.dashboard);
+              }
+            }
+          } else {
+            print('⚠️ User doc not found, going to User Dashboard');
+            if (mounted) {
+              Navigator.pushReplacementNamed(context, AppRoutes.dashboard);
+            }
+          }
+        } else {
+          print('⚠️ No current user, going to User Dashboard');
+          if (mounted) {
+            Navigator.pushReplacementNamed(context, AppRoutes.dashboard);
+          }
         }
       } catch (e) {
+        print('❌ Login error: $e');
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
@@ -1157,6 +1217,33 @@ class _LoginScreenState extends State<LoginScreen> {
                               ),
                             ],
                           ),
+                        ),
+                        const SizedBox(height: 16),
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Text(
+                              'Are you a Librarian? ',
+                              style: GoogleFonts.poppins(
+                                fontSize: 13,
+                                color: AppTheme.secondaryText,
+                              ),
+                            ),
+                            GestureDetector(
+                              onTap: () => Navigator.pushNamed(
+                                context,
+                                AppRoutes.librarianLogin,
+                              ),
+                              child: Text(
+                                'Login as Librarian',
+                                style: GoogleFonts.poppins(
+                                  fontSize: 13,
+                                  fontWeight: FontWeight.w600,
+                                  color: AppTheme.primaryBlue,
+                                ),
+                              ),
+                            ),
+                          ],
                         ),
                         const SizedBox(height: 16),
                         Column(

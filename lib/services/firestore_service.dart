@@ -31,9 +31,22 @@ class FirestoreService {
   // Get all books stream
   Stream<List<Book>> getBooksStream() {
     return _booksCollection.snapshots().map((snapshot) {
-      return snapshot.docs.map((doc) {
-        return Book.fromJson(doc.data() as Map<String, dynamic>);
-      }).toList();
+      try {
+        final books = snapshot.docs.map((doc) {
+          try {
+            return Book.fromJson(doc.data() as Map<String, dynamic>);
+          } catch (e) {
+            print('❌ Error parsing book ${doc.id}: $e');
+            print('Data: ${doc.data()}');
+            return null;
+          }
+        }).whereType<Book>().toList();
+        print('✅ Successfully parsed ${books.length} books');
+        return books;
+      } catch (e) {
+        print('❌ Error in getBooksStream: $e');
+        return [];
+      }
     });
   }
 

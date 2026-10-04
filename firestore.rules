@@ -16,6 +16,12 @@ service cloud.firestore {
              get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
     }
     
+    // Helper function to check if user is librarian
+    function isLibrarian() {
+      return isAuthenticated() && 
+             get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'librarian';
+    }
+    
     // Helper function to check if user is the owner of the document
     function isOwner(userId) {
       return isAuthenticated() && request.auth.uid == userId;
@@ -41,14 +47,14 @@ service cloud.firestore {
       // Authenticated users can read books
       allow read: if isAuthenticated();
       
-      // Only admins can create, update, or delete books
-      allow create, update, delete: if isAdmin();
+      // Admins and librarians can create, update, or delete books
+      allow create, update, delete: if isAdmin() || isLibrarian();
     }
     
     // Holds collection
     match /holds/{holdId} {
       // Users can read their own holds
-      allow read: if isOwner(resource.data.userId) || isAdmin();
+      allow read: if isOwner(resource.data.userId) || isAdmin() || isLibrarian();
       
       // Users can create holds for themselves
       allow create: if isAuthenticated() && 
@@ -57,8 +63,8 @@ service cloud.firestore {
       // Users can update their own holds (e.g., cancel)
       allow update: if isOwner(resource.data.userId);
       
-      // Only admins can delete holds
-      allow delete: if isAdmin();
+      // Admins and librarians can delete holds
+      allow delete: if isAdmin() || isLibrarian();
     }
     
     // Notices collection
@@ -67,8 +73,8 @@ service cloud.firestore {
       allow read: if isAuthenticated() && 
                    resource.data.status == 'published';
       
-      // Admins can read all notices
-      allow read: if isAdmin();
+      // Admins and librarians can read all notices
+      allow read: if isAdmin() || isLibrarian();
       
       // TEMPORARY: Allow authenticated users to create/update notices for testing
       // TODO: Change back to isAdmin() for production

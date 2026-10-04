@@ -1,7 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:read_space/main.dart';
 import 'package:read_space/models/book.dart';
+import 'package:read_space/models/hold.dart';
+import 'package:read_space/services/firestore_service.dart';
 
 /// Hold Request screen — matches M02 hi-fi "Hold Request / Join the Queue" flow.
 /// Shown when user taps "Reserve / Place Hold" on an unavailable book.
@@ -15,59 +18,58 @@ class HoldRequestScreen extends StatefulWidget {
 
 class _HoldRequestScreenState extends State<HoldRequestScreen> {
   bool _placing = false;
+  final FirestoreService _firestoreService = FirestoreService();
+  Book? _book;
 
-  static List<Book> get _sampleBooks => [
-    Book(
-      id: '1',
-      title: 'Design Patterns',
-      author: 'E. Gamma, R. Helm, R. Johnson',
-      isbn: '9780201633610',
-      genre: 'Technology',
-      description: 'Elements of Reusable Object-Oriented Software',
-      pages: 395,
-      language: 'English',
-      status: BookStatus.available,
-      section: LibrarySection.general,
-      shelfLocation: 'A-12',
-      totalCopies: 3,
-      availableCopies: 2,
-      holdCount: 1,
-      coverColor: const Color(0xFF123C69),
-    ),
-    Book(
-      id: '2',
-      title: 'Clean Code',
-      author: 'Robert C. Martin',
-      isbn: '9780132350884',
-      genre: 'Technology',
-      description: 'A Handbook of Agile Software Craftsmanship',
-      pages: 464,
-      language: 'English',
-      status: BookStatus.onLoan,
-      section: LibrarySection.quiet,
-      shelfLocation: 'Q-05',
-      totalCopies: 2,
-      availableCopies: 0,
-      holdCount: 3,
-      coverColor: const Color(0xFFE8A43A),
-    ),
-  ];
+  @override
+  void initState() {
+    super.initState();
+    _fetchBook();
+  }
 
-  Book? _book() => _sampleBooks.cast<Book?>().firstWhere(
-    (b) => b?.id == widget.bookId,
-    orElse: () => null,
-  );
+  Future<void> _fetchBook() async {
+    try {
+      final book = await _firestoreService.getBookById(widget.bookId);
+      if (mounted) {
+        setState(() => _book = book);
+      }
+    } catch (e) {
+      print('Error fetching book: $e');
+    }
+  }
 
   Future<void> _confirmJoin(
       BuildContext context, Book book) async {
     final messenger = ScaffoldMessenger.of(context);
+    final userId = FirebaseAuth.instance.currentUser?.uid;
+    
+    if (userId == null) {
+      messenger.showSnackBar(
+        const SnackBar(
+          content: Text('Please log in to place a hold'),
+          backgroundColor: AppTheme.red,
+        ),
+      );
+      return;
+    }
+
     setState(() => _placing = true);
     try {
-      await Future.delayed(const Duration(seconds: 1));
+      final hold = Hold(
+        id: DateTime.now().millisecondsSinceEpoch.toString(),
+        userId: userId,
+        bookId: book.id,
+        createdAt: DateTime.now(),
+        holdStatus: HoldStatus.pending,
+        queuePosition: book.holdCount + 1,
+      );
+      
+      await _firestoreService.createHold(hold);
+      
       if (!mounted) return;
       messenger.showSnackBar(
         SnackBar(
-          content: Text('You joined the queue for "${book.title}" (demo).'),
+          content: Text('You joined the queue for "${book.title}"'),
           backgroundColor: AppTheme.success,
           duration: const Duration(seconds: 3),
         ),
@@ -88,9 +90,7 @@ class _HoldRequestScreenState extends State<HoldRequestScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final book = _book();
-
-    if (book == null) {
+    if (_book == null) {
       return Scaffold(
         backgroundColor: AppTheme.pageBackground,
         appBar: AppBar(
@@ -104,20 +104,19 @@ class _HoldRequestScreenState extends State<HoldRequestScreen> {
             fontWeight: FontWeight.w700,
             color: AppTheme.textPrimary,
           ),
-          iconTheme: const IconThemeData(color: AppTheme.textPrimary),
-          leading: const BackButton(color: AppTheme.textPrimary),
-          title: const Text('Hold Request'),
+          iconTheme: IconThemeData(color: AppTheme.textPrimary),
+          leading: BackButton(color: AppTheme.textPrimary),
+          title: const Text('Loading...'),
           centerTitle: true,
         ),
-        body: Center(
-          child: Text('Book not found.',
-              style: Theme.of(context).textTheme.bodyMedium),
+        body: const Center(
+          child: CircularProgressIndicator(),
         ),
       );
     }
 
     // Demo queue position = holdCount + 1
-    final queuePos = book.holdCount + 1;
+    final queuePos = _book!.holdCount + 1;
 
     return Scaffold(
       backgroundColor: AppTheme.pageBackground,
@@ -191,19 +190,19 @@ class _HoldRequestScreenState extends State<HoldRequestScreen> {
                     width: 52,
                     height: 68,
                     decoration: BoxDecoration(
-                      color: book.coverColor,
+                      color: _book!.coverColor,
                       borderRadius: BorderRadius.circular(8),
                     ),
                     child: Icon(Icons.menu_book_rounded,
                         color: AppTheme.secondaryText, size: 24),
                   ),
                   const SizedBox(width: 12),
-                  Expanded(
+                  Flexible(
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(
-                          book.title,
+                          _book!.title,
                           style: GoogleFonts.inter(
                             fontSize: 14,
                             fontWeight: FontWeight.w700,
@@ -214,7 +213,7 @@ class _HoldRequestScreenState extends State<HoldRequestScreen> {
                         ),
                         const SizedBox(height: 4),
                         Text(
-                          'by ${book.author}',
+                          'by ${_book!.author}',
                           style: GoogleFonts.inter(
                               fontSize: 12, color: AppTheme.secondaryText),
                         ),
@@ -274,7 +273,7 @@ class _HoldRequestScreenState extends State<HoldRequestScreen> {
                     ),
                   ),
                   const SizedBox(width: 12),
-                  Expanded(
+                  Flexible(
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
@@ -287,7 +286,7 @@ class _HoldRequestScreenState extends State<HoldRequestScreen> {
                           ),
                         ),
                         Text(
-                          '${book.totalCopies} total copies · ${book.holdCount} on loan',
+                          '${_book!.totalCopies} total copies · ${_book!.holdCount} on loan',
                           style: GoogleFonts.inter(
                               fontSize: 12, color: AppTheme.secondaryText),
                         ),
@@ -374,7 +373,7 @@ class _HoldRequestScreenState extends State<HoldRequestScreen> {
               width: double.infinity,
               child: ElevatedButton(
                 onPressed:
-                    _placing ? null : () => _confirmJoin(context, book),
+                    _placing ? null : () => _confirmJoin(context, _book!),
                 style: ElevatedButton.styleFrom(
                   padding: const EdgeInsets.symmetric(vertical: 15),
                   shape: RoundedRectangleBorder(

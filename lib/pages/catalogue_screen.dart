@@ -54,19 +54,25 @@ class _CatalogueScreenState extends State<CatalogueScreen> {
   }
 
   List<Book> _filtered(List<Book> all) {
+    print('🔍 Filtering ${all.length} books with chip: $_activeChip, search: "${_searchCtrl.text}"');
     var list = all;
 
     switch (_activeChip) {
       case 'Available Now':
         list = list.where((b) => b.status == BookStatus.available).toList();
+        print('🔍 After Available Now filter: ${list.length} books');
       case 'Quiet Zone':
         list = list.where((b) => b.section == LibrarySection.quiet).toList();
+        print('🔍 After Quiet Zone filter: ${list.length} books');
       case 'Computer Sci':
         list = list.where((b) => b.genre == 'Technology').toList();
+        print('🔍 After Computer Sci filter: ${list.length} books');
       case 'All':
+        print('🔍 No chip filter applied');
         break;
       default:
         list = list.where((b) => b.genre == _activeChip).toList();
+        print('🔍 After genre filter ($_activeChip): ${list.length} books');
     }
 
     final q = _searchCtrl.text.trim().toLowerCase();
@@ -77,8 +83,10 @@ class _CatalogueScreenState extends State<CatalogueScreen> {
               b.author.toLowerCase().contains(q) ||
               b.isbn.contains(q))
           .toList();
+      print('🔍 After search filter: ${list.length} books');
     }
 
+    print('🔍 Final filtered count: ${list.length}');
     return list;
   }
 
@@ -275,6 +283,7 @@ class _CatalogueScreenState extends State<CatalogueScreen> {
                 }
 
                 if (snapshot.hasError) {
+                  print('❌ Error loading books: ${snapshot.error}');
                   return Expanded(
                     child: Center(
                       child: Column(
@@ -293,65 +302,69 @@ class _CatalogueScreenState extends State<CatalogueScreen> {
                 }
 
                 final allBooks = snapshot.data ?? [];
+                print('📚 Total books from Firestore: ${allBooks.length}');
                 final books = _filtered(allBooks);
+                print('📚 Filtered books: ${books.length}');
 
-                return Column(
-                  children: [
-                    Padding(
-                      padding: const EdgeInsets.fromLTRB(16, 4, 16, 4),
-                      child: Row(
-                        children: [
-                          Text(
-                            'Search Results',
-                            style: GoogleFonts.inter(
-                              fontSize: 24,
-                              fontWeight: FontWeight.w800,
-                              color: AppTheme.textPrimary,
-                            ),
-                          ),
-                          const Spacer(),
-                          Text(
-                            'Showing ${books.length} book${books.length == 1 ? '' : 's'}',
-                            style: GoogleFonts.inter(
-                                fontSize: 11, color: AppTheme.secondaryText),
-                          ),
-                        ],
-                      ),
-                    ),
-                    const SizedBox(height: 2),
-
-                    // ── Book list ────────────────────────────────────────────────
-                    Expanded(
-                      child: Builder(
-                        builder: (context) {
-                          if (books.isEmpty) {
-                            return _EmptyState(
-                              query: _searchCtrl.text,
-                              chip: _activeChip,
-                              onClear: () => setState(() {
-                                _searchCtrl.clear();
-                                _activeChip = 'All';
-                              }),
-                            );
-                          }
-
-                          return ListView.builder(
-                            key: const PageStorageKey<String>('catalogue_book_list'),
-                            padding: const EdgeInsets.fromLTRB(12, 6, 12, 24),
-                            itemCount: books.length,
-                            itemBuilder: (context, i) => _BookCard(
-                              book: books[i],
-                              onView: () => Navigator.pushNamed(
-                                context,
-                                AppRoutes.bookDetail,
-                                arguments: books[i].id,
+                return Expanded(
+                  child: Column(
+                    children: [
+                      Padding(
+                        padding: const EdgeInsets.fromLTRB(16, 4, 16, 4),
+                        child: Row(
+                          children: [
+                            Text(
+                              'Search Results',
+                              style: GoogleFonts.inter(
+                                fontSize: 24,
+                                fontWeight: FontWeight.w800,
+                                color: AppTheme.textPrimary,
                               ),
                             ),
-                          );
-                        },
+                            const Spacer(),
+                            Text(
+                              'Showing ${books.length} book${books.length == 1 ? '' : 's'}',
+                              style: GoogleFonts.inter(
+                                  fontSize: 11, color: AppTheme.secondaryText),
+                            ),
+                          ],
+                        ),
                       ),
-                    ),
-                  ],
+                      const SizedBox(height: 2),
+
+                      // ── Book list ────────────────────────────────────────────────
+                      Expanded(
+                        child: Builder(
+                          builder: (context) {
+                            if (books.isEmpty) {
+                              return _EmptyState(
+                                query: _searchCtrl.text,
+                                chip: _activeChip,
+                                onClear: () => setState(() {
+                                  _searchCtrl.clear();
+                                  _activeChip = 'All';
+                                }),
+                              );
+                            }
+
+                            return ListView.builder(
+                              key: const PageStorageKey<String>('catalogue_book_list'),
+                              padding: const EdgeInsets.fromLTRB(12, 6, 12, 24),
+                              itemCount: books.length,
+                              itemBuilder: (context, i) => _BookCard(
+                                book: books[i],
+                                onView: () => Navigator.pushNamed(
+                                  context,
+                                  AppRoutes.bookDetail,
+                                  arguments: books[i].id,
+                                ),
+                              ),
+                            );
+                          },
+                        ),
+                      ),
+                    ],
+                  ),
                 );
               },
             ),

@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:read_space/main.dart';
 import 'package:read_space/models/book.dart';
+import 'package:read_space/services/firestore_service.dart';
 
 class BookDetailScreen extends StatefulWidget {
   const BookDetailScreen({super.key, required this.bookId});
@@ -14,65 +16,25 @@ class BookDetailScreen extends StatefulWidget {
 class _BookDetailScreenState extends State<BookDetailScreen> {
   bool _placing = false;
   bool _isSaving = false;
+  final FirestoreService _firestoreService = FirestoreService();
+  Book? _book;
 
-  static List<Book> get _sampleBooks => [
-    Book(
-      id: '1',
-      title: 'Design Patterns',
-      author: 'E. Gamma, R. Helm, R. Johnson',
-      isbn: '9780201633610',
-      genre: 'Technology',
-      description: 'Elements of Reusable Object-Oriented Software',
-      pages: 395,
-      language: 'English',
-      status: BookStatus.available,
-      section: LibrarySection.general,
-      shelfLocation: 'A-12',
-      totalCopies: 3,
-      availableCopies: 2,
-      holdCount: 1,
-      coverColor: const Color(0xFF123C69),
-    ),
-    Book(
-      id: '2',
-      title: 'Clean Code',
-      author: 'Robert C. Martin',
-      isbn: '9780132350884',
-      genre: 'Technology',
-      description: 'A Handbook of Agile Software Craftsmanship',
-      pages: 464,
-      language: 'English',
-      status: BookStatus.onLoan,
-      section: LibrarySection.quiet,
-      shelfLocation: 'Q-05',
-      totalCopies: 2,
-      availableCopies: 0,
-      holdCount: 3,
-      coverColor: const Color(0xFFE8A43A),
-    ),
-    Book(
-      id: '3',
-      title: 'The Pragmatic Programmer',
-      author: 'Andrew Hunt, David Thomas',
-      isbn: '9780201616224',
-      genre: 'Technology',
-      description: 'Your Journey to Mastery',
-      pages: 352,
-      language: 'English',
-      status: BookStatus.available,
-      section: LibrarySection.general,
-      shelfLocation: 'A-08',
-      totalCopies: 4,
-      availableCopies: 3,
-      holdCount: 0,
-      coverColor: const Color(0xFF1E88E5),
-    ),
-  ];
+  @override
+  void initState() {
+    super.initState();
+    _fetchBook();
+  }
 
-  Book? _book() => _sampleBooks.cast<Book?>().firstWhere(
-    (b) => b?.id == widget.bookId,
-    orElse: () => null,
-  );
+  Future<void> _fetchBook() async {
+    try {
+      final book = await _firestoreService.getBookById(widget.bookId);
+      if (mounted) {
+        setState(() => _book = book);
+      }
+    } catch (e) {
+      print('Error fetching book: $e');
+    }
+  }
 
   Future<void> _reserveOrHold(
       BuildContext context, Book book) async {
@@ -155,7 +117,7 @@ class _BookDetailScreenState extends State<BookDetailScreen> {
               const SizedBox(width: 8),
               Expanded(
                 child: Text(
-                  'Reserved "${book.title}" (demo).',
+                  'Reserved "${_book!.title}" (demo).',
                   style: GoogleFonts.inter(fontWeight: FontWeight.w500),
                 ),
               ),
@@ -180,51 +142,17 @@ class _BookDetailScreenState extends State<BookDetailScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final book = _book();
-
-    if (book == null) {
+    if (_book == null) {
       return Scaffold(
         appBar: AppBar(
           backgroundColor: AppTheme.pageBackground,
           foregroundColor: AppTheme.textPrimary,
           elevation: 0,
           leading: const BackButton(color: AppTheme.textPrimary),
-          title: const Text('Book Not Found'),
+          title: const Text('Loading...'),
         ),
-        body: Center(
-          child: Padding(
-            padding: const EdgeInsets.all(24),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                const Icon(Icons.menu_book_rounded,
-                    size: 64, color: AppTheme.secondaryText),
-                const SizedBox(height: 12),
-                Text(
-                  'Book Not Found',
-                  style: GoogleFonts.inter(
-                    fontSize: 18,
-                    fontWeight: FontWeight.w700,
-                    color: AppTheme.textPrimary,
-                  ),
-                ),
-                const SizedBox(height: 8),
-                Text(
-                  'The requested book (ID: ${widget.bookId}) was not found in the library catalogue.',
-                  textAlign: TextAlign.center,
-                  style: GoogleFonts.inter(
-                    fontSize: 13,
-                    color: AppTheme.secondaryText,
-                  ),
-                ),
-                const SizedBox(height: 20),
-                ElevatedButton(
-                  onPressed: () => Navigator.pop(context),
-                  child: const Text('Back to Catalogue'),
-                ),
-              ],
-            ),
-          ),
+        body: const Center(
+          child: CircularProgressIndicator(),
         ),
       );
     }
@@ -270,7 +198,7 @@ class _BookDetailScreenState extends State<BookDetailScreen> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             // ── Book cover image area ──────────────────────────────────
-            _BookCoverSection(book: book),
+            _BookCoverSection(book: _book!),
 
             // ── Book info ──────────────────────────────────────────────
             Padding(
@@ -280,7 +208,7 @@ class _BookDetailScreenState extends State<BookDetailScreen> {
                 children: [
                   // Title
                   Text(
-                    book.title,
+                    _book!.title,
                     style: GoogleFonts.inter(
                       fontSize: 20,
                       fontWeight: FontWeight.w800,
@@ -291,7 +219,7 @@ class _BookDetailScreenState extends State<BookDetailScreen> {
                   const SizedBox(height: 4),
                   // Author
                   Text(
-                    book.author,
+                    _book!.author,
                     style: GoogleFonts.inter(
                         fontSize: 13, color: AppTheme.secondaryText),
                   ),
@@ -300,13 +228,13 @@ class _BookDetailScreenState extends State<BookDetailScreen> {
                   _StarRating(rating: 4.5, reviewCount: 48),
                   const SizedBox(height: 12),
                   // Pages · Format · Language row
-                  _MetaRow(book: book),
+                  _MetaRow(book: _book!),
                   const SizedBox(height: 16),
                   const Divider(),
                   const SizedBox(height: 14),
 
                   // ── Library Status section ─────────────────────────
-                  _LibraryStatusSection(book: book),
+                  _LibraryStatusSection(book: _book!),
                   const SizedBox(height: 14),
                   const Divider(),
                   const SizedBox(height: 14),
@@ -322,7 +250,7 @@ class _BookDetailScreenState extends State<BookDetailScreen> {
                   ),
                   const SizedBox(height: 8),
                   Text(
-                    book.description,
+                    _book!.description,
                     style: GoogleFonts.inter(
                       fontSize: 13,
                       color: AppTheme.secondaryText,
@@ -359,7 +287,7 @@ class _BookDetailScreenState extends State<BookDetailScreen> {
                       child: ElevatedButton.icon(
                         onPressed: _placing
                             ? null
-                            : () => _reserveOrHold(context, book),
+                            : () => _reserveOrHold(context, _book!),
                         icon: _placing
                             ? const SizedBox(
                                 width: 16,
@@ -368,9 +296,9 @@ class _BookDetailScreenState extends State<BookDetailScreen> {
                                     color: Colors.white, strokeWidth: 2))
                             : const Icon(Icons.bookmark_add_rounded, size: 20),
                         label: Text(
-                          book.status == BookStatus.available
+                          _book!.status == BookStatus.available
                               ? 'Reserve / Place Hold'
-                              : 'Join the Queue (${book.holdCount} waiting)',
+                              : 'Join the Queue (${_book!.holdCount} waiting)',
                           style: GoogleFonts.inter(
                               fontSize: 15, fontWeight: FontWeight.w600),
                         ),
@@ -399,7 +327,7 @@ class _BookDetailScreenState extends State<BookDetailScreen> {
                                     if (!mounted) return;
                                     messenger.showSnackBar(
                                       SnackBar(
-                                        content: Text('"${book.title}" saved to your list (demo).'),
+                                        content: Text('"${_book!.title}" saved to your list (demo).'),
                                         duration: const Duration(seconds: 2),
                                       ),
                                     );
