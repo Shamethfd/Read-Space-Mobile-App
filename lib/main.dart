@@ -4,13 +4,18 @@ import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:read_space/firebase_options.dart';
+import 'package:read_space/models/fine_appeal.dart';
+import 'package:read_space/pages/admin_appeal_details_screen.dart';
+import 'package:read_space/pages/admin_appeals_screen.dart';
 import 'package:read_space/pages/admin_dashboard_screen.dart';
 import 'package:read_space/pages/admin_notices_screen.dart';
+import 'package:read_space/pages/appeal_details_screen.dart';
 import 'package:read_space/pages/book_detail_screen.dart';
 import 'package:read_space/pages/catalogue_screen.dart';
 import 'package:read_space/pages/dashboard_page.dart';
 import 'package:read_space/pages/edit_notice_screen.dart';
 import 'package:read_space/pages/edit_profile_page.dart';
+import 'package:read_space/pages/fine_appeals_screen.dart';
 import 'package:read_space/pages/hold_request_screen.dart';
 import 'package:read_space/pages/holds_screen.dart';
 import 'package:read_space/pages/member_profile_page.dart';
@@ -18,6 +23,7 @@ import 'package:read_space/pages/notice_details_screen.dart';
 import 'package:read_space/pages/notifications_screen.dart';
 import 'package:read_space/pages/pay_library_fine_screen.dart';
 import 'package:read_space/pages/publish_notice_screen.dart';
+import 'package:read_space/pages/submit_appeal_screen.dart';
 import 'package:read_space/pages/transaction_details_screen.dart';
 import 'package:read_space/services/admin_auth_service.dart';
 import 'package:read_space/services/auth_service.dart';
@@ -52,6 +58,11 @@ class AppRoutes {
   static const bookDetail = '/book-detail';
   static const holdRequest = '/hold-request';
   static const holds = '/holds';
+  static const fineAppeals = '/fine-appeals';
+  static const submitAppeal = '/submit-appeal';
+  static const appealDetails = '/appeal-details';
+  static const adminAppeals = '/admin-appeals';
+  static const adminAppealDetails = '/admin-appeal-details';
 }
 
 class AppTheme {
@@ -133,6 +144,9 @@ class ReadSpaceApp extends StatelessWidget {
         AppRoutes.librarianLogin: (_) => const LibrarianLoginScreen(),
         AppRoutes.catalogue: (_) => const CatalogueScreen(),
         AppRoutes.holds: (_) => const HoldsScreen(),
+        AppRoutes.fineAppeals: (_) => const FineAppealsScreen(),
+        AppRoutes.submitAppeal: (_) => const SubmitAppealScreen(),
+        AppRoutes.adminAppeals: (_) => const AdminAppealsScreen(),
       },
       onGenerateRoute: (settings) {
         if (settings.name == AppRoutes.editProfile) {
@@ -257,6 +271,75 @@ class ReadSpaceApp extends StatelessWidget {
           return PageRouteBuilder<void>(
             settings: settings,
             pageBuilder: (_, animation, _) => HoldRequestScreen(bookId: bookId ?? ''),
+            transitionsBuilder: (_, animation, _, child) {
+              final curved = CurvedAnimation(
+                parent: animation,
+                curve: Curves.easeOutCubic,
+              );
+              return FadeTransition(
+                opacity: curved,
+                child: SlideTransition(
+                  position: Tween<Offset>(
+                    begin: const Offset(0.04, 0),
+                    end: Offset.zero,
+                  ).animate(curved),
+                  child: child,
+                ),
+              );
+            },
+          );
+        }
+        if (settings.name == AppRoutes.submitAppeal) {
+          final existingAppeal = settings.arguments as FineAppeal?;
+          return PageRouteBuilder<void>(
+            settings: settings,
+            pageBuilder: (_, animation, _) => SubmitAppealScreen(existingAppeal: existingAppeal),
+            transitionsBuilder: (_, animation, _, child) {
+              final curved = CurvedAnimation(
+                parent: animation,
+                curve: Curves.easeOutCubic,
+              );
+              return FadeTransition(
+                opacity: curved,
+                child: SlideTransition(
+                  position: Tween<Offset>(
+                    begin: const Offset(0.04, 0),
+                    end: Offset.zero,
+                  ).animate(curved),
+                  child: child,
+                ),
+              );
+            },
+          );
+        }
+        if (settings.name == AppRoutes.appealDetails) {
+          final appeal = settings.arguments as FineAppeal;
+          return PageRouteBuilder<void>(
+            settings: settings,
+            pageBuilder: (_, animation, _) => AppealDetailsScreen(appeal: appeal),
+            transitionsBuilder: (_, animation, _, child) {
+              final curved = CurvedAnimation(
+                parent: animation,
+                curve: Curves.easeOutCubic,
+              );
+              return FadeTransition(
+                opacity: curved,
+                child: SlideTransition(
+                  position: Tween<Offset>(
+                    begin: const Offset(0.04, 0),
+                    end: Offset.zero,
+                  ).animate(curved),
+                  child: child,
+                ),
+              );
+            },
+          );
+        }
+        if (settings.name == AppRoutes.adminAppealDetails) {
+          final appeal = settings.arguments as FineAppeal;
+          return PageRouteBuilder<void>(
+            settings: settings,
+            pageBuilder: (_, animation, _) => AdminAppealDetailsScreen(appeal: appeal),
             transitionsBuilder: (_, animation, _, child) {
               final curved = CurvedAnimation(
                 parent: animation,

@@ -3,7 +3,7 @@ import 'package:qr_flutter/qr_flutter.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 
-import '../main.dart' show AppRoutes;
+import '../main.dart' show AppTheme, AppRoutes;
 import '../widgets/library_bottom_navigation.dart';
 import '../models/user_profile.dart';
 import '../services/firestore_service.dart';
@@ -294,6 +294,8 @@ class _ProfileContent extends StatelessWidget {
         _MemberCard(member: member, hasMember: hasMember, onTap: onEditProfile),
         const SizedBox(height: 16),
         _FinesCard(balance: member.outstandingFines, onPayOnline: onPayOnline),
+        const SizedBox(height: 16),
+        _AppealsCard(),
         const SizedBox(height: 26),
         _SectionHeader(
           title: 'Borrowing History',
@@ -525,6 +527,67 @@ class _FinesCard extends StatelessWidget {
             ),
           ),
         ],
+      ),
+    );
+  }
+}
+
+class _AppealsCard extends StatelessWidget {
+  const _AppealsCard();
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return _SurfaceCard(
+      child: InkWell(
+        onTap: () => Navigator.pushNamed(context, AppRoutes.fineAppeals),
+        borderRadius: BorderRadius.circular(16),
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: Row(
+            children: [
+              Container(
+                width: 48,
+                height: 48,
+                decoration: BoxDecoration(
+                  color: AppTheme.orange.withValues(alpha: 0.1),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Icon(
+                  Icons.gavel_outlined,
+                  color: AppTheme.orange,
+                  size: 24,
+                ),
+              ),
+              const SizedBox(width: 16),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Fine Appeals',
+                      style: theme.textTheme.titleSmall?.copyWith(
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      'Submit or view your fine appeals',
+                      style: theme.textTheme.bodySmall?.copyWith(
+                        color: theme.colorScheme.onSurfaceVariant,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              Icon(
+                Icons.arrow_forward_ios,
+                size: 16,
+                color: theme.colorScheme.onSurfaceVariant,
+              ),
+            ],
+          ),
+        ),
       ),
     );
   }

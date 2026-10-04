@@ -1,5 +1,6 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import '../models/book.dart';
+import '../models/fine_appeal.dart';
 import '../models/hold.dart';
 import '../models/notice.dart';
 import '../models/payment_transaction.dart';
@@ -21,6 +22,9 @@ class FirestoreService {
 
   // Users collection
   CollectionReference get _usersCollection => _firestore.collection('users');
+
+  // Fine Appeals collection
+  CollectionReference get _fineAppealsCollection => _firestore.collection('fineAppeals');
 
   // ==================== BOOKS ====================
 
@@ -278,6 +282,104 @@ class FirestoreService {
       await _usersCollection.doc(uid).update(data);
     } catch (e) {
       throw Exception('Failed to update user: $e');
+    }
+  }
+
+  // ==================== FINE APPEALS ====================
+
+  // Get user's appeals stream
+  Stream<List<FineAppeal>> getUserAppealsStream(String userId) {
+    return _fineAppealsCollection
+        .where('userId', isEqualTo: userId)
+        .orderBy('submittedAt', descending: true)
+        .snapshots()
+        .map((snapshot) {
+      return snapshot.docs.map((doc) {
+        return FineAppeal.fromJson(doc.data() as Map<String, dynamic>);
+      }).toList();
+    });
+  }
+
+  // Get user's appeals (one-time)
+  Future<List<FineAppeal>> getUserAppeals(String userId) async {
+    try {
+      final snapshot = await _fineAppealsCollection
+          .where('userId', isEqualTo: userId)
+          .orderBy('submittedAt', descending: true)
+          .get();
+      return snapshot.docs.map((doc) {
+        return FineAppeal.fromJson(doc.data() as Map<String, dynamic>);
+      }).toList();
+    } catch (e) {
+      throw Exception('Failed to get appeals: $e');
+    }
+  }
+
+  // Get all appeals (for admin)
+  Stream<List<FineAppeal>> getAllAppealsStream() {
+    return _fineAppealsCollection
+        .orderBy('submittedAt', descending: true)
+        .snapshots()
+        .map((snapshot) {
+      return snapshot.docs.map((doc) {
+        return FineAppeal.fromJson(doc.data() as Map<String, dynamic>);
+      }).toList();
+    });
+  }
+
+  // Get appeals by status (for admin filtering)
+  Stream<List<FineAppeal>> getAppealsByStatusStream(String status) {
+    return _fineAppealsCollection
+        .where('status', isEqualTo: status)
+        .orderBy('submittedAt', descending: true)
+        .snapshots()
+        .map((snapshot) {
+      return snapshot.docs.map((doc) {
+        return FineAppeal.fromJson(doc.data() as Map<String, dynamic>);
+      }).toList();
+    });
+  }
+
+  // Get appeal by ID
+  Future<FineAppeal?> getAppealById(String appealId) async {
+    try {
+      final doc = await _fineAppealsCollection.doc(appealId).get();
+      if (doc.exists) {
+        return FineAppeal.fromJson(doc.data() as Map<String, dynamic>);
+      }
+      return null;
+    } catch (e) {
+      throw Exception('Failed to get appeal: $e');
+    }
+  }
+
+  // Create appeal
+  Future<void> createAppeal(FineAppeal appeal) async {
+    try {
+      await _fineAppealsCollection.doc(appeal.id).set(appeal.toJson());
+    } catch (e) {
+      throw Exception('Failed to create appeal: $e');
+    }
+  }
+
+  // Update appeal
+  Future<void> updateAppeal(String appealId, Map<String, dynamic> data) async {
+    try {
+      await _fineAppealsCollection.doc(appealId).update(data);
+    } catch (e) {
+      throw Exception('Failed to update appeal: $e');
+    }
+  }
+
+  // Cancel appeal
+  Future<void> cancelAppeal(String appealId) async {
+    try {
+      await _fineAppealsCollection.doc(appealId).update({
+        'status': 'cancelled',
+        'updatedAt': DateTime.now().toIso8601String(),
+      });
+    } catch (e) {
+      throw Exception('Failed to cancel appeal: $e');
     }
   }
 }

@@ -4,5 +4,172 @@ service cloud.firestore {
     // TEMPORARY: Completely open rules for testing
     // TODO: Restore proper security rules after testing
     allow read, write: if true;
+    
+    // Helper function to check if user is authenticated
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+    
+    // Helper function to check if user is admin
+    function isAdmin() {
+      return isAuthenticated() && 
+             get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
+    }
+    
+    // Helper function to check if user is the owner of the document
+    function isOwner(userId) {
+      return isAuthenticated() && request.auth.uid == userId;
+    }
+    
+    // Users collection
+    match /users/{userId} {
+      // Users can read their own profile
+      allow read: if isOwner(userId) || isAdmin();
+      
+      // Users can create their own profile (during registration)
+      allow create: if isOwner(userId);
+      
+      // Users can update their own profile
+      allow update: if isOwner(userId);
+      
+      // Only admins can delete users
+      allow delete: if isAdmin();
+    }
+    
+    // Books collection
+    match /books/{bookId} {
+      // Authenticated users can read books
+      allow read: if isAuthenticated();
+      
+      // Only admins can create, update, or delete books
+      allow create, update, delete: if isAdmin();
+    }
+    
+    // Holds collection
+    match /holds/{holdId} {
+      // Users can read their own holds
+      allow read: if isOwner(resource.data.userId) || isAdmin();
+      
+      // Users can create holds for themselves
+      allow create: if isAuthenticated() && 
+                     request.resource.data.userId == request.auth.uid;
+      
+      // Users can update their own holds (e.g., cancel)
+      allow update: if isOwner(resource.data.userId);
+      
+      // Only admins can delete holds
+      allow delete: if isAdmin();
+    }
+    
+    // Notices collection
+    match /notices/{noticeId} {
+      // Authenticated users can read published notices
+      allow read: if isAuthenticated() && 
+                   resource.data.status == 'published';
+      
+      // Admins can read all notices
+      allow read: if isAdmin();
+      
+      // TEMPORARY: Allow authenticated users to create/update notices for testing
+      // TODO: Change back to isAdmin() for production
+      allow create, update: if isAuthenticated();
+      allow delete: if isAdmin();
+    }
+    
+    // Payments collection
+    match /payments/{paymentId} {
+      // Users can read their own payments
+      allow read: if isOwner(resource.data.memberId) || isAdmin();
+      
+      // Users can create their own payments
+      allow create: if isAuthenticated() && 
+                     request.resource.data.memberId == request.auth.uid;
+      
+      // Only admins can update payments (e.g., approve/reject)
+      allow update: if isAdmin();
+      
+      // Only admins can delete payments
+      allow delete: if isAdmin();
+    }
+    
+    // Bookings collection
+    match /bookings/{bookingId} {
+      // Users can read their own bookings
+      allow read: if isOwner(resource.data.userId) || isAdmin();
+      
+      // Users can create bookings for themselves
+      allow create: if isAuthenticated() && 
+                     request.resource.data.userId == request.auth.uid;
+      
+      // Users can update their own bookings (e.g., cancel)
+      allow update: if isOwner(resource.data.userId);
+      
+      // Only admins can delete bookings
+      allow delete: if isAdmin();
+    }
+    
+    // Fines collection
+    match /fines/{fineId} {
+      // Users can read their own fines
+      allow read: if isOwner(resource.data.userId) || isAdmin();
+      
+      // Only admins can create fines
+      allow create: if isAdmin();
+      
+      // Only admins can update fines
+      allow update: if isAdmin();
+      
+      // Only admins can delete fines
+      allow delete: if isAdmin();
+    }
+    
+    // Fine Appeals collection
+    match /fineAppeals/{appealId} {
+      // Users can read their own appeals
+      allow read: if isOwner(resource.data.userId) || isAdmin();
+      
+      // Users can create appeals for themselves
+      allow create: if isAuthenticated() && 
+                     request.resource.data.userId == request.auth.uid;
+      
+      // Users can update their own appeals only when status is pending
+      // Users cannot modify: status, resolvedAt, resolvedBy, adminResponse, userId
+      allow update: if isOwner(resource.data.userId) && 
+                    resource.data.status == 'pending' &&
+                    !request.resource.data.diff(resource.data).affectedKeys().hasAny(['status', 'resolvedAt', 'resolvedBy', 'adminResponse', 'userId']);
+      
+      // Users can cancel their own appeals only when status is pending
+      allow update: if isOwner(resource.data.userId) && 
+                    request.resource.data.status == 'cancelled' &&
+                    resource.data.status == 'pending';
+      
+      // Admins can read all appeals
+      allow read: if isAdmin();
+      
+      // Admins can update appeal status, admin response, resolution details
+      allow update: if isAdmin();
+      
+      // Only admins can delete appeals
+      allow delete: if isAdmin();
+    }
+    
+    // User notice read status collection
+    match /userNoticeReadStatus/{statusId} {
+      // Users can read their own read status
+      allow read: if isAuthenticated() && 
+                   statusId.startsWith(request.auth.uid);
+      
+      // Users can create their own read status
+      allow create: if isAuthenticated() && 
+                     request.resource.data.userId == request.auth.uid;
+      
+      // Users can update their own read status
+      allow update: if isAuthenticated() && 
+                     request.resource.data.userId == request.auth.uid;
+      
+      // Users can delete their own read status
+      allow delete: if isAuthenticated() && 
+                   resource.data.userId == request.auth.uid;
+    }
   }
 }
