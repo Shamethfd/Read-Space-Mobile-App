@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:read_space/main.dart' show AppTheme, AppRoutes;
 import 'package:read_space/models/notice.dart';
 import 'package:read_space/services/notification_service.dart';
@@ -18,17 +19,24 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
   List<Notice> _unreadNotices = [];
   bool _isLoading = true;
   String? _errorMessage;
-
-  // TODO: Get actual user ID from auth service
-  final String _currentUserId = 'user_123';
+  String? _currentUserId;
 
   @override
   void initState() {
     super.initState();
+    _currentUserId = FirebaseAuth.instance.currentUser?.uid;
     _loadNotifications();
   }
 
   Future<void> _loadNotifications() async {
+    if (_currentUserId == null) {
+      setState(() {
+        _errorMessage = 'Please log in to view notifications';
+        _isLoading = false;
+      });
+      return;
+    }
+
     setState(() {
       _isLoading = true;
       _errorMessage = null;
@@ -36,7 +44,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
 
     try {
       final notices = await _notificationService.getUserNotifications();
-      final unreadNotices = await _notificationService.getUnreadNotices(_currentUserId);
+      final unreadNotices = await _notificationService.getUnreadNotices(_currentUserId!);
       
       if (mounted) {
         setState(() {
@@ -56,12 +64,14 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
   }
 
   Future<void> _markAsRead(Notice notice) async {
-    await _notificationService.markAsRead(_currentUserId, notice.id);
+    if (_currentUserId == null) return;
+    await _notificationService.markAsRead(_currentUserId!, notice.id);
     await _loadNotifications();
   }
 
   Future<void> _markAllAsRead() async {
-    await _notificationService.markAllAsRead(_currentUserId);
+    if (_currentUserId == null) return;
+    await _notificationService.markAllAsRead(_currentUserId!);
     await _loadNotifications();
   }
 

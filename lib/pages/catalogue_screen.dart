@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:read_space/main.dart';
 import 'package:read_space/models/book.dart';
+import 'package:read_space/services/firestore_service.dart';
 
 class CatalogueScreen extends StatefulWidget {
   const CatalogueScreen({super.key, this.query = '', this.onlyAvailable = false, this.genre = 'All', this.section});
@@ -17,6 +18,7 @@ class CatalogueScreen extends StatefulWidget {
 class _CatalogueScreenState extends State<CatalogueScreen> {
   late final TextEditingController _searchCtrl;
   late String _activeChip; // 'All' | 'Available Now' | 'Quiet Zone' | genre
+  final FirestoreService _firestoreService = FirestoreService();
 
   // M02 design chip labels (matches the hi-fi exactly)
   static const _chips = [
@@ -28,111 +30,6 @@ class _CatalogueScreenState extends State<CatalogueScreen> {
     'History',
     'Fiction',
     'Arts',
-  ];
-
-  static List<Book> get _sampleBooks => [
-    Book(
-      id: '1',
-      title: 'Design Patterns',
-      author: 'E. Gamma, R. Helm, R. Johnson',
-      isbn: '9780201633610',
-      genre: 'Technology',
-      description: 'Elements of Reusable Object-Oriented Software',
-      pages: 395,
-      language: 'English',
-      status: BookStatus.available,
-      section: LibrarySection.general,
-      shelfLocation: 'A-12',
-      totalCopies: 3,
-      availableCopies: 2,
-      holdCount: 1,
-      coverColor: const Color(0xFF123C69),
-    ),
-    Book(
-      id: '2',
-      title: 'Clean Code',
-      author: 'Robert C. Martin',
-      isbn: '9780132350884',
-      genre: 'Technology',
-      description: 'A Handbook of Agile Software Craftsmanship',
-      pages: 464,
-      language: 'English',
-      status: BookStatus.onLoan,
-      section: LibrarySection.quiet,
-      shelfLocation: 'Q-05',
-      totalCopies: 2,
-      availableCopies: 0,
-      holdCount: 3,
-      coverColor: const Color(0xFFE8A43A),
-    ),
-    Book(
-      id: '3',
-      title: 'The Pragmatic Programmer',
-      author: 'Andrew Hunt, David Thomas',
-      isbn: '9780201616224',
-      genre: 'Technology',
-      description: 'Your Journey to Mastery',
-      pages: 352,
-      language: 'English',
-      status: BookStatus.available,
-      section: LibrarySection.general,
-      shelfLocation: 'A-08',
-      totalCopies: 4,
-      availableCopies: 3,
-      holdCount: 0,
-      coverColor: const Color(0xFF1E88E5),
-    ),
-    Book(
-      id: '4',
-      title: 'Introduction to Algorithms',
-      author: 'Thomas H. Cormen',
-      isbn: '9780262033848',
-      genre: 'Science',
-      description: 'A comprehensive introduction to the modern study of computer algorithms',
-      pages: 1312,
-      language: 'English',
-      status: BookStatus.available,
-      section: LibrarySection.quiet,
-      shelfLocation: 'Q-15',
-      totalCopies: 2,
-      availableCopies: 1,
-      holdCount: 2,
-      coverColor: const Color(0xFF43A047),
-    ),
-    Book(
-      id: '5',
-      title: 'Sapiens',
-      author: 'Yuval Noah Harari',
-      isbn: '9780062316097',
-      genre: 'History',
-      description: 'A Brief History of Humankind',
-      pages: 443,
-      language: 'English',
-      status: BookStatus.available,
-      section: LibrarySection.general,
-      shelfLocation: 'H-03',
-      totalCopies: 5,
-      availableCopies: 4,
-      holdCount: 1,
-      coverColor: const Color(0xFF7B1FA2),
-    ),
-    Book(
-      id: '6',
-      title: '1984',
-      author: 'George Orwell',
-      isbn: '9780451524935',
-      genre: 'Fiction',
-      description: 'A dystopian social science fiction novel',
-      pages: 328,
-      language: 'English',
-      status: BookStatus.onLoan,
-      section: LibrarySection.general,
-      shelfLocation: 'F-22',
-      totalCopies: 3,
-      availableCopies: 0,
-      holdCount: 5,
-      coverColor: const Color(0xFFD32F2F),
-    ),
   ];
 
   @override
@@ -187,7 +84,6 @@ class _CatalogueScreenState extends State<CatalogueScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final books = _filtered(_sampleBooks);
     final canPop = Navigator.canPop(context);
     final showBackButton = canPop;
 
@@ -369,60 +265,95 @@ class _CatalogueScreenState extends State<CatalogueScreen> {
             const SizedBox(height: 6),
 
             // ── Results count ────────────────────────────────────────────
-            Padding(
-              padding: const EdgeInsets.fromLTRB(16, 4, 16, 4),
-              child: Row(
-                children: [
-                  Text(
-                    'Search Results',
-                    style: GoogleFonts.inter(
-                      fontSize: 24,
-                      fontWeight: FontWeight.w800,
-                      color: AppTheme.textPrimary,
-                    ),
-                  ),
-                  const Spacer(),
-                  Text(
-                    'Showing ${books.length} book${books.length == 1 ? '' : 's'}',
-                    style: GoogleFonts.inter(
-                        fontSize: 11, color: AppTheme.secondaryText),
-                  ),
-                ],
-              ),
-            ),
-            const SizedBox(height: 2),
+            StreamBuilder<List<Book>>(
+              stream: _firestoreService.getBooksStream(),
+              builder: (context, snapshot) {
+                if (snapshot.connectionState == ConnectionState.waiting) {
+                  return const Expanded(
+                    child: Center(child: CircularProgressIndicator()),
+                  );
+                }
 
-            // ── Book list ────────────────────────────────────────────────
-            Expanded(
-              child: Builder(
-                builder: (context) {
-
-                  if (books.isEmpty) {
-                    return _EmptyState(
-                      query: _searchCtrl.text,
-                      chip: _activeChip,
-                      onClear: () => setState(() {
-                        _searchCtrl.clear();
-                        _activeChip = 'All';
-                      }),
-                    );
-                  }
-
-                  return ListView.builder(
-                    key: const PageStorageKey<String>('catalogue_book_list'),
-                    padding: const EdgeInsets.fromLTRB(12, 6, 12, 24),
-                    itemCount: books.length,
-                    itemBuilder: (context, i) => _BookCard(
-                      book: books[i],
-                      onView: () => Navigator.pushNamed(
-                        context,
-                        AppRoutes.bookDetail,
-                        arguments: books[i].id,
+                if (snapshot.hasError) {
+                  return Expanded(
+                    child: Center(
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          const Icon(Icons.error_outline, size: 48, color: AppTheme.secondaryText),
+                          const SizedBox(height: 16),
+                          Text(
+                            'Failed to load books',
+                            style: GoogleFonts.inter(fontSize: 14, color: AppTheme.secondaryText),
+                          ),
+                        ],
                       ),
                     ),
                   );
-                },
-              ),
+                }
+
+                final allBooks = snapshot.data ?? [];
+                final books = _filtered(allBooks);
+
+                return Column(
+                  children: [
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(16, 4, 16, 4),
+                      child: Row(
+                        children: [
+                          Text(
+                            'Search Results',
+                            style: GoogleFonts.inter(
+                              fontSize: 24,
+                              fontWeight: FontWeight.w800,
+                              color: AppTheme.textPrimary,
+                            ),
+                          ),
+                          const Spacer(),
+                          Text(
+                            'Showing ${books.length} book${books.length == 1 ? '' : 's'}',
+                            style: GoogleFonts.inter(
+                                fontSize: 11, color: AppTheme.secondaryText),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+
+                    // ── Book list ────────────────────────────────────────────────
+                    Expanded(
+                      child: Builder(
+                        builder: (context) {
+                          if (books.isEmpty) {
+                            return _EmptyState(
+                              query: _searchCtrl.text,
+                              chip: _activeChip,
+                              onClear: () => setState(() {
+                                _searchCtrl.clear();
+                                _activeChip = 'All';
+                              }),
+                            );
+                          }
+
+                          return ListView.builder(
+                            key: const PageStorageKey<String>('catalogue_book_list'),
+                            padding: const EdgeInsets.fromLTRB(12, 6, 12, 24),
+                            itemCount: books.length,
+                            itemBuilder: (context, i) => _BookCard(
+                              book: books[i],
+                              onView: () => Navigator.pushNamed(
+                                context,
+                                AppRoutes.bookDetail,
+                                arguments: books[i].id,
+                              ),
+                            ),
+                          );
+                        },
+                      ),
+                    ),
+                  ],
+                );
+              },
             ),
           ],
         ),

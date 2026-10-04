@@ -1,8 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:qr_flutter/qr_flutter.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 
 import '../main.dart' show AppRoutes;
 import '../widgets/library_bottom_navigation.dart';
+import '../models/user_profile.dart';
+import '../services/firestore_service.dart';
+import '../services/payment_service.dart';
 
 typedef MemberProfileLoader = Future<MemberProfileData> Function();
 
@@ -58,6 +63,19 @@ class MemberProfileData {
       borrowingHistory: borrowingHistory ?? this.borrowingHistory,
     );
   }
+
+  static MemberProfileData fromUserProfile(UserProfile userProfile, double outstandingFines) {
+    return MemberProfileData(
+      fullName: userProfile.fullName,
+      memberId: userProfile.studentId,
+      profileImageUrl: userProfile.profileImageUrl,
+      phoneNumber: userProfile.phoneNumber,
+      universityEmail: userProfile.universityEmail,
+      facultyDepartment: userProfile.facultyDepartment,
+      outstandingFines: outstandingFines,
+      borrowingHistory: const [],
+    );
+  }
 }
 
 enum BorrowingStatus { active, overdue, returned }
@@ -98,12 +116,16 @@ class _MemberProfilePageState extends State<MemberProfilePage> {
   late MemberProfileData? _member = widget.member;
   Object? _error;
   bool _loading = false;
+  final FirestoreService _firestoreService = FirestoreService();
+  final PaymentService _paymentService = PaymentService();
 
   @override
   void initState() {
     super.initState();
     if (widget.loadProfile != null) {
       _loadProfile();
+    } else {
+      _loadFromFirestore();
     }
   }
 
@@ -124,6 +146,81 @@ class _MemberProfilePageState extends State<MemberProfilePage> {
       setState(() {
         _error = error;
         _loading = false;
+      });
+    }
+  }
+
+  Future<void> _loadFromFirestore() async {
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) {
+      setState(() {
+        _error = 'Not logged in';
+        _loading = false;
+      });
+      return;
+    }
+
+    setState(() {
+      _loading = true;
+      _error = null;
+    });
+
+    try {
+      print('Loading profile for user: ${user.uid}');
+      print('User email: ${user.email}');
+      print('User display name: ${user.displayName}');
+      
+      final userData = await _firestoreService.getUserById(user.uid);
+      print('User data from Firestore: ${userData != null ? "Found" : "Not found"}');
+      
+      if (userData != null) {
+        print('User data keys: ${userData.keys.toList()}');
+      }
+      
+      final outstandingFines = await _paymentService.getOutstandingFines(user.uid);
+      print('Outstanding fines: $outstandingFines');
+
+      if (!mounted) return;
+
+      if (userData != null) {
+        final userProfile = UserProfile.fromJson(userData);
+        setState(() {
+          _member = MemberProfileData.fromUserProfile(userProfile, outstandingFines);
+          _loading = false;
+        });
+        print('Profile loaded successfully');
+      } else {
+        print('User document not found in Firestore, using Firebase Auth data');
+        setState(() {
+          _member = MemberProfileData(
+            fullName: user.displayName ?? user.email?.split('@')[0] ?? 'User',
+            memberId: '',
+            universityEmail: user.email ?? '',
+            outstandingFines: outstandingFines,
+          );
+          _loading = false;
+        });
+      }
+    } on FirebaseException catch (e) {
+      print('Firebase error loading profile: ${e.code} - ${e.message}');
+      if (!mounted) return;
+      setState(() {
+        _error = 'Firebase configuration error. Please check google-services.json';
+        _loading = false;
+      });
+    } catch (error) {
+      print('Error loading profile: $error');
+      print('Error type: ${error.runtimeType}');
+      if (!mounted) return;
+      setState(() {
+        _error = 'Failed to load profile. Using basic info.';
+        _loading = false;
+        _member = MemberProfileData(
+          fullName: user.displayName ?? user.email?.split('@')[0] ?? 'User',
+          memberId: '',
+          universityEmail: user.email ?? '',
+          outstandingFines: 0,
+        );
       });
     }
   }
@@ -149,8 +246,6 @@ class _MemberProfilePageState extends State<MemberProfilePage> {
         top: false,
         child: _loading
             ? const Center(child: CircularProgressIndicator())
-            : _error != null
-            ? _ErrorState(onRetry: _loadProfile)
             : _ProfileContent(
                 member: _member ?? const MemberProfileData.empty(),
                 onEditProfile: () => Navigator.of(context).pushNamed(

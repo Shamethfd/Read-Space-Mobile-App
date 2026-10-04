@@ -566,12 +566,8 @@ class _SplashScreenState extends State<SplashScreen> {
   void _checkAuthState() {
     Timer(const Duration(milliseconds: 2200), () {
       if (mounted) {
-        final user = _authService.currentUser;
-        if (user != null) {
-          Navigator.pushReplacementNamed(context, AppRoutes.dashboard);
-        } else {
-          Navigator.pushReplacementNamed(context, AppRoutes.onboarding);
-        }
+        // Always go to onboarding - user must login explicitly
+        Navigator.pushReplacementNamed(context, AppRoutes.onboarding);
       }
     });
   }

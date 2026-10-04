@@ -1,23 +1,17 @@
 import '../models/payment_transaction.dart';
+import 'firestore_service.dart';
 
 class PaymentService {
-  // TODO: Replace with actual API calls
-  // This is a placeholder for backend integration
-
-  // In-memory storage for demo purposes
-  final List<PaymentTransaction> _transactions = [];
+  final FirestoreService _firestoreService = FirestoreService();
 
   Future<List<PaymentTransaction>> getPaymentsByMember(String memberId) async {
-    // TODO: Replace with GET /payments?memberId=userId API call
-    await Future.delayed(const Duration(milliseconds: 500));
-    return _transactions.where((t) => t.memberId == memberId).toList();
+    return await _firestoreService.getUserPaymentsStream(memberId).first;
   }
 
   Future<PaymentTransaction?> getPaymentById(String id) async {
-    // TODO: Replace with GET /payments/:id API call
-    await Future.delayed(const Duration(milliseconds: 300));
+    final payments = await _firestoreService.getAllPaymentsStream().first;
     try {
-      return _transactions.firstWhere((t) => t.id == id);
+      return payments.firstWhere((t) => t.id == id);
     } catch (e) {
       return null;
     }
@@ -32,9 +26,6 @@ class PaymentService {
     String? bookTitle,
     required String receiptUrl,
   }) async {
-    // TODO: Replace with POST /payments API call
-    await Future.delayed(const Duration(milliseconds: 800));
-
     final transaction = PaymentTransaction(
       id: DateTime.now().millisecondsSinceEpoch.toString(),
       memberId: memberId,
@@ -50,7 +41,7 @@ class PaymentService {
       createdAt: DateTime.now(),
     );
 
-    _transactions.add(transaction);
+    await _firestoreService.createPayment(transaction);
     return transaction;
   }
 
@@ -59,27 +50,20 @@ class PaymentService {
     required PaymentStatus status,
     String? verifiedBy,
   }) async {
-    // TODO: Replace with PUT /payments/:id/status API call
-    await Future.delayed(const Duration(milliseconds: 500));
-
-    final index = _transactions.indexWhere((t) => t.id == paymentId);
-    if (index != -1) {
-      final updated = _transactions[index].copyWith(
-        status: status,
-        verifiedBy: verifiedBy,
-        verifiedAt: status == PaymentStatus.approved ? DateTime.now() : null,
-      );
-      _transactions[index] = updated;
-      return updated;
-    }
-
-    throw Exception('Payment not found');
+    final payments = await _firestoreService.getAllPaymentsStream().first;
+    final payment = payments.firstWhere((t) => t.id == paymentId);
+    
+    final updated = payment.copyWith(
+      status: status,
+      verifiedBy: verifiedBy,
+      verifiedAt: status == PaymentStatus.approved ? DateTime.now() : null,
+    );
+    
+    await _firestoreService.updatePayment(paymentId, updated.toJson());
+    return updated;
   }
 
   Future<double> getOutstandingFines(String memberId) async {
-    // TODO: Replace with GET /members/:id/fines API call
-    await Future.delayed(const Duration(milliseconds: 300));
-    // Return pending + rejected payments as outstanding
     final payments = await getPaymentsByMember(memberId);
     return payments
         .where((p) => p.status == PaymentStatus.pending || p.status == PaymentStatus.rejected)

@@ -1,29 +1,29 @@
+import 'package:cloud_firestore/cloud_firestore.dart';
 import '../models/notice.dart';
 import '../models/user_notice_read_status.dart';
 import 'notice_service.dart';
 
 class NotificationService {
   final NoticeService _noticeService = NoticeService();
-
-  // TODO: Replace with actual API calls
-  // This is a placeholder for backend integration
-
-  // In-memory storage for demo purposes
-  final List<UserNoticeReadStatus> _readStatuses = [];
+  final FirebaseFirestore _firestore = FirebaseFirestore.instance;
 
   // Get all published notices for the user
   Future<List<Notice>> getUserNotifications() async {
-    // TODO: Replace with GET /notifications API call
     return await _noticeService.getPublishedNotices();
   }
 
   // Get unread notices for a specific user
   Future<List<Notice>> getUnreadNotices(String userId) async {
-    // TODO: Replace with GET /notifications?userId=userId&unread=true API call
     final allNotices = await _noticeService.getPublishedNotices();
-    final readNoticeIds = _readStatuses
-        .where((status) => status.userId == userId)
-        .map((status) => status.noticeId)
+    
+    // Get read notice IDs from Firestore
+    final readStatusesSnapshot = await _firestore
+        .collection('userNoticeReadStatus')
+        .where('userId', isEqualTo: userId)
+        .get();
+    
+    final readNoticeIds = readStatusesSnapshot.docs
+        .map((doc) => doc.data()['noticeId'] as String)
         .toSet();
 
     return allNotices.where((notice) => !readNoticeIds.contains(notice.id)).toList();
@@ -31,47 +31,53 @@ class NotificationService {
 
   // Get count of unread notices for a user
   Future<int> getUnreadCount(String userId) async {
-    // TODO: Replace with GET /notifications/unread-count API call
     final unreadNotices = await getUnreadNotices(userId);
     return unreadNotices.length;
   }
 
   // Mark a notice as read for a user
   Future<void> markAsRead(String userId, String noticeId) async {
-    // TODO: Replace with PUT /notifications/:noticeId/read API call
-    await Future.delayed(const Duration(milliseconds: 300));
-
-    // Check if already marked as read
-    final existing = _readStatuses.firstWhere(
-      (status) => status.userId == userId && status.noticeId == noticeId,
-      orElse: () => UserNoticeReadStatus(
-        userId: userId,
-        noticeId: noticeId,
-        readAt: DateTime.now(),
-      ),
+    final readStatus = UserNoticeReadStatus(
+      userId: userId,
+      noticeId: noticeId,
+      readAt: DateTime.now(),
     );
 
-    if (!_readStatuses.contains(existing)) {
-      _readStatuses.add(existing);
-    }
+    await _firestore
+        .collection('userNoticeReadStatus')
+        .doc('$userId-$noticeId')
+        .set(readStatus.toJson());
   }
 
   // Mark all notices as read for a user
   Future<void> markAllAsRead(String userId) async {
-    // TODO: Replace with PUT /notifications/read-all API call
-    await Future.delayed(const Duration(milliseconds: 500));
-
     final allNotices = await _noticeService.getPublishedNotices();
+    final batch = _firestore.batch();
+    
     for (final notice in allNotices) {
-      await markAsRead(userId, notice.id);
+      final docRef = _firestore
+          .collection('userNoticeReadStatus')
+          .doc('$userId-${notice.id}');
+      
+      final readStatus = UserNoticeReadStatus(
+        userId: userId,
+        noticeId: notice.id,
+        readAt: DateTime.now(),
+      );
+      
+      batch.set(docRef, readStatus.toJson());
     }
+    
+    await batch.commit();
   }
 
   // Check if a notice is read by a user
   Future<bool> isNoticeRead(String userId, String noticeId) async {
-    // TODO: Replace with GET /notifications/:noticeId/read-status API call
-    return _readStatuses.any(
-      (status) => status.userId == userId && status.noticeId == noticeId,
-    );
+    final doc = await _firestore
+        .collection('userNoticeReadStatus')
+        .doc('$userId-$noticeId')
+        .get();
+    
+    return doc.exists;
   }
 }

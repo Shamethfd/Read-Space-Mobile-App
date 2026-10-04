@@ -1,66 +1,47 @@
 import '../models/notice.dart';
+import 'firestore_service.dart';
 
 class NoticeService {
-  // TODO: Replace with actual API calls
-  // This is a placeholder for backend integration
-
-  // In-memory storage for demo purposes
-  final List<Notice> _notices = [];
+  final FirestoreService _firestoreService = FirestoreService();
 
   Future<List<Notice>> getAllNotices() async {
-    // TODO: Replace with GET /notices API call
-    await Future.delayed(const Duration(milliseconds: 500));
-    return List.from(_notices);
+    return await _firestoreService.getAllNoticesStream().first;
   }
 
   Future<List<Notice>> getPublishedNotices() async {
-    // TODO: Replace with GET /notices?status=published API call
-    await Future.delayed(const Duration(milliseconds: 500));
-    return _notices.where((notice) => notice.isActive).toList();
+    return await _firestoreService.getActiveNoticesStream().first;
   }
 
   Future<Notice?> getNoticeById(String id) async {
-    // TODO: Replace with GET /notices/:id API call
-    await Future.delayed(const Duration(milliseconds: 300));
+    final notices = await getAllNotices();
     try {
-      return _notices.firstWhere((notice) => notice.id == id);
+      return notices.firstWhere((notice) => notice.id == id);
     } catch (e) {
       return null;
     }
   }
 
   Future<Notice> createNotice(Notice notice) async {
-    // TODO: Replace with POST /notices API call
-    await Future.delayed(const Duration(milliseconds: 800));
-    _notices.add(notice);
+    await _firestoreService.addNotice(notice);
     return notice;
   }
 
   Future<Notice> updateNotice(Notice notice) async {
-    // TODO: Replace with PUT /notices/:id API call
-    await Future.delayed(const Duration(milliseconds: 800));
-    final index = _notices.indexWhere((n) => n.id == notice.id);
-    if (index != -1) {
-      _notices[index] = notice;
-    }
+    await _firestoreService.updateNotice(notice.id, notice.toJson());
     return notice;
   }
 
   Future<void> deleteNotice(String id) async {
-    // TODO: Replace with DELETE /notices/:id API call
-    await Future.delayed(const Duration(milliseconds: 500));
-    _notices.removeWhere((notice) => notice.id == id);
+    await _firestoreService.deleteNotice(id);
   }
 
   Future<List<Notice>> getNoticesByCreator(String createdBy) async {
-    // TODO: Replace with GET /notices?createdBy=userId API call
-    await Future.delayed(const Duration(milliseconds: 500));
-    return _notices.where((notice) => notice.createdBy == createdBy).toList();
+    final notices = await getAllNotices();
+    return notices.where((notice) => notice.createdBy == createdBy).toList();
   }
 
   Future<List<Notice>> getNoticesByCategory(NoticeCategory category) async {
-    // TODO: Replace with GET /notices?category=category API call
-    await Future.delayed(const Duration(milliseconds: 500));
-    return _notices.where((notice) => notice.category == category).toList();
+    final notices = await getAllNotices();
+    return notices.where((notice) => notice.category == category).toList();
   }
 }

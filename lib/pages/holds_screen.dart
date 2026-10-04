@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:read_space/main.dart';
 import 'package:read_space/models/book.dart';
 import 'package:read_space/models/hold.dart';
+import 'package:read_space/services/firestore_service.dart';
 
 class HoldsScreen extends StatefulWidget {
   const HoldsScreen({super.key});
@@ -12,58 +14,41 @@ class HoldsScreen extends StatefulWidget {
 }
 
 class _HoldsScreenState extends State<HoldsScreen> {
-  static List<Book> get _sampleBooks => [
-    Book(
-      id: '1',
-      title: 'Design Patterns',
-      author: 'E. Gamma, R. Helm, R. Johnson',
-      isbn: '9780201633610',
-      genre: 'Technology',
-      description: 'Elements of Reusable Object-Oriented Software',
-      pages: 395,
-      language: 'English',
-      status: BookStatus.available,
-      section: LibrarySection.general,
-      shelfLocation: 'A-12',
-      totalCopies: 3,
-      availableCopies: 2,
-      holdCount: 1,
-      coverColor: const Color(0xFF123C69),
-    ),
-    Book(
-      id: '2',
-      title: 'Clean Code',
-      author: 'Robert C. Martin',
-      isbn: '9780132350884',
-      genre: 'Technology',
-      description: 'A Handbook of Agile Software Craftsmanship',
-      pages: 464,
-      language: 'English',
-      status: BookStatus.onLoan,
-      section: LibrarySection.quiet,
-      shelfLocation: 'Q-05',
-      totalCopies: 2,
-      availableCopies: 0,
-      holdCount: 3,
-      coverColor: const Color(0xFFE8A43A),
-    ),
-  ];
+  final FirestoreService _firestoreService = FirestoreService();
+  String? _currentUserId;
 
-  static List<Hold> get _sampleHolds => [
-    Hold(
-      id: 'h1',
-      bookId: '2',
-      userId: 'user1',
-      createdAt: DateTime.now().subtract(const Duration(days: 2)),
-      holdStatus: HoldStatus.pending,
-      queuePosition: 2,
-    ),
-  ];
+  @override
+  void initState() {
+    super.initState();
+    _currentUserId = FirebaseAuth.instance.currentUser?.uid;
+  }
 
   @override
   Widget build(BuildContext context) {
-    final holds = _sampleHolds;
-    final books = _sampleBooks;
+    if (_currentUserId == null) {
+      return Scaffold(
+        backgroundColor: AppTheme.pageBackground,
+        appBar: AppBar(
+          backgroundColor: AppTheme.pageBackground,
+          foregroundColor: AppTheme.textPrimary,
+          elevation: 0,
+          scrolledUnderElevation: 0,
+          surfaceTintColor: Colors.transparent,
+          titleTextStyle: GoogleFonts.inter(
+            fontSize: 18,
+            fontWeight: FontWeight.w700,
+            color: AppTheme.textPrimary,
+          ),
+          iconTheme: IconThemeData(color: AppTheme.textPrimary),
+          leading: BackButton(color: AppTheme.textPrimary),
+          title: const Text('My Holds'),
+          centerTitle: true,
+        ),
+        body: const Center(
+          child: Text('Please log in to view your holds'),
+        ),
+      );
+    }
 
     return Scaffold(
       backgroundColor: AppTheme.pageBackground,
@@ -83,8 +68,33 @@ class _HoldsScreenState extends State<HoldsScreen> {
         title: const Text('My Holds'),
         centerTitle: true,
       ),
-      body: holds.isEmpty
-          ? Center(
+      body: StreamBuilder<List<Hold>>(
+        stream: _firestoreService.getUserHoldsStream(_currentUserId!),
+        builder: (context, snapshot) {
+          if (snapshot.connectionState == ConnectionState.waiting) {
+            return const Center(child: CircularProgressIndicator());
+          }
+
+          if (snapshot.hasError) {
+            return Center(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  const Icon(Icons.error_outline, size: 48, color: AppTheme.secondaryText),
+                  const SizedBox(height: 16),
+                  Text(
+                    'Failed to load holds',
+                    style: GoogleFonts.inter(fontSize: 14, color: AppTheme.secondaryText),
+                  ),
+                ],
+              ),
+            );
+          }
+
+          final holds = snapshot.data ?? [];
+
+          if (holds.isEmpty) {
+            return Center(
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
@@ -107,19 +117,74 @@ class _HoldsScreenState extends State<HoldsScreen> {
                   ),
                 ],
               ),
-            )
-          : ListView.builder(
-              padding: const EdgeInsets.all(16),
-              itemCount: holds.length,
-              itemBuilder: (context, index) {
-                final hold = holds[index];
-                final book = books.firstWhere(
-                  (b) => b.id == hold.bookId,
-                  orElse: () => books[0],
+            );
+          }
+
+          return FutureBuilder<List<Book>>(
+            future: _loadBooksForHolds(holds),
+            builder: (context, booksSnapshot) {
+              if (booksSnapshot.connectionState == ConnectionState.waiting) {
+                return const Center(child: CircularProgressIndicator());
+              }
+
+              if (booksSnapshot.hasError) {
+                return Center(
+                  child: Text('Error loading books'),
                 );
-                return _HoldCard(hold: hold, book: book);
-              },
-            ),
+              }
+
+              final books = booksSnapshot.data ?? [];
+
+              return ListView.builder(
+                padding: const EdgeInsets.all(16),
+                itemCount: holds.length,
+                itemBuilder: (context, index) {
+                  final hold = holds[index];
+                  final book = books.firstWhere(
+                    (b) => b.id == hold.bookId,
+                    orElse: () => _createPlaceholderBook(),
+                  );
+                  return _HoldCard(hold: hold, book: book);
+                },
+              );
+            },
+          );
+        },
+      ),
+    );
+  }
+
+  Future<List<Book>> _loadBooksForHolds(List<Hold> holds) async {
+    final bookIds = holds.map((h) => h.bookId).toSet().toList();
+    final books = <Book>[];
+    
+    for (final bookId in bookIds) {
+      final book = await _firestoreService.getBookById(bookId);
+      if (book != null) {
+        books.add(book);
+      }
+    }
+    
+    return books;
+  }
+
+  Book _createPlaceholderBook() {
+    return Book(
+      id: '',
+      title: 'Unknown Book',
+      author: 'Unknown Author',
+      isbn: '',
+      genre: 'Unknown',
+      description: '',
+      pages: 0,
+      language: 'English',
+      status: BookStatus.available,
+      section: LibrarySection.general,
+      shelfLocation: '',
+      totalCopies: 0,
+      availableCopies: 0,
+      holdCount: 0,
+      coverColor: AppTheme.secondaryText,
     );
   }
 }

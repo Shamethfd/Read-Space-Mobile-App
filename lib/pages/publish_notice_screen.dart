@@ -41,6 +41,7 @@ class _PublishNoticeScreenState extends State<PublishNoticeScreen> {
     setState(() => _isLoading = true);
 
     try {
+      print('Creating notice...');
       final notice = Notice(
         id: DateTime.now().millisecondsSinceEpoch.toString(),
         title: _titleController.text.trim(),
@@ -56,7 +57,9 @@ class _PublishNoticeScreenState extends State<PublishNoticeScreen> {
         attachmentUrl: _attachmentUrl,
       );
 
+      print('Notice data: ${notice.toJson()}');
       await _noticeService.createNotice(notice);
+      print('Notice created successfully');
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -68,11 +71,14 @@ class _PublishNoticeScreenState extends State<PublishNoticeScreen> {
         Navigator.pop(context);
       }
     } catch (e) {
+      print('Error publishing notice: $e');
+      print('Error type: ${e.runtimeType}');
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Failed to publish notice. Please try again.'),
+          SnackBar(
+            content: Text('Failed to publish notice: ${e.toString()}'),
             backgroundColor: AppTheme.red,
+            duration: const Duration(seconds: 5),
           ),
         );
       }

@@ -1,10 +1,14 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 
 import '../main.dart' show AppRoutes;
 import '../widgets/library_bottom_navigation.dart';
 import '../widgets/notification_badge.dart';
 import '../services/notification_service.dart';
+import '../services/firestore_service.dart';
+import '../models/book.dart';
+import '../models/hold.dart';
 import 'member_profile_page.dart';
 
 class DashboardPage extends StatefulWidget {
@@ -17,6 +21,14 @@ class DashboardPage extends StatefulWidget {
 class _DashboardPageState extends State<DashboardPage> {
   int _selectedNavigationIndex = 0;
   final _searchController = TextEditingController();
+  final FirestoreService _firestoreService = FirestoreService();
+  String? _currentUserId;
+
+  @override
+  void initState() {
+    super.initState();
+    _currentUserId = FirebaseAuth.instance.currentUser?.uid;
+  }
 
   @override
   void dispose() {
@@ -34,7 +46,7 @@ class _DashboardPageState extends State<DashboardPage> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              const _DashboardHeader(),
+              _DashboardHeader(userId: _currentUserId),
               const SizedBox(height: 22),
               const _BookingAlert(),
               const SizedBox(height: 18),
@@ -46,7 +58,7 @@ class _DashboardPageState extends State<DashboardPage> {
                     child: _QuickActionCard(
                       icon: Icons.search_rounded,
                       title: 'Search Catalogue',
-                      subtitle: 'Browse 50,000+ volumes',
+                      subtitle: 'Browse library',
                       color: _DashboardColors.primary,
                       onTap: () => Navigator.pushNamed(context, AppRoutes.catalogue),
                     ),
@@ -68,49 +80,17 @@ class _DashboardPageState extends State<DashboardPage> {
                 action: 'See All',
               ),
               const SizedBox(height: 12),
-              const _RecentReservationCard(
-                category: 'DESK BOOKING',
-                status: 'Today',
-                title: 'Study Desk 04-B',
-                subtitle: 'Floor 2  •  quiet study area',
-                time: '10:00 AM - 14:00 PM',
-                icon: Icons.event_seat_outlined,
-                statusColor: _DashboardColors.primary,
-              ),
-              const SizedBox(height: 10),
-              _RecentReservationCard(
-                category: 'BOOK HOLD',
-                status: 'Active',
-                title: 'Designing...',
-                subtitle: 'By Alan Co...',
-                time: 'Due in 12 days',
-                icon: Icons.menu_book_outlined,
-                statusColor: _DashboardColors.green,
-                onTap: () => Navigator.pushNamed(context, AppRoutes.holds),
-              ),
+              if (_currentUserId != null)
+                _RecentHolds(userId: _currentUserId!)
+              else
+                const Center(child: Text('Log in to view reservations')),
               const SizedBox(height: 28),
               const _SectionHeader(
-                title: 'Trending Books This Week',
+                title: 'Trending Books',
                 action: 'View All',
               ),
               const SizedBox(height: 12),
-              const _TrendingBookCard(
-                title: 'The User Interface Blueprint',
-                author: 'Jonathan Larson  •  Technology',
-                status: 'Available',
-                statusColor: _DashboardColors.green,
-                coverColor: Color(0xFF123C69),
-                coverIcon: Icons.auto_awesome,
-              ),
-              const SizedBox(height: 10),
-              const _TrendingBookCard(
-                title: 'Form, Space, and Order',
-                author: 'Francis D. K. Ching',
-                status: 'On Hold',
-                statusColor: _DashboardColors.red,
-                coverColor: Color(0xFFE8A43A),
-                coverIcon: Icons.architecture_rounded,
-              ),
+              _TrendingBooks(firestoreService: _firestoreService),
             ],
           ),
         ),
@@ -179,7 +159,9 @@ class _DashboardColors {
 }
 
 class _DashboardHeader extends StatefulWidget {
-  const _DashboardHeader();
+  const _DashboardHeader({this.userId});
+
+  final String? userId;
 
   @override
   State<_DashboardHeader> createState() => _DashboardHeaderState();
@@ -196,9 +178,8 @@ class _DashboardHeaderState extends State<_DashboardHeader> {
   }
 
   Future<void> _loadUnreadCount() async {
-    // TODO: Get actual user ID from auth service
-    final userId = 'user_123';
-    final count = await _notificationService.getUnreadCount(userId);
+    if (widget.userId == null) return;
+    final count = await _notificationService.getUnreadCount(widget.userId!);
     if (mounted) {
       setState(() => _unreadCount = count);
     }
@@ -244,7 +225,7 @@ class _DashboardHeaderState extends State<_DashboardHeader> {
                 children: [
                   const TextSpan(text: 'Hello, '),
                   TextSpan(
-                    text: 'Student!',
+                    text: widget.userId != null ? 'Student!' : 'Guest',
                     style: GoogleFonts.poppins(
                       color: _DashboardColors.text,
                       fontWeight: FontWeight.w700,
@@ -685,6 +666,125 @@ class _StatusPill extends StatelessWidget {
           fontWeight: FontWeight.w600,
         ),
       ),
+    );
+  }
+}
+
+class _RecentHolds extends StatelessWidget {
+  const _RecentHolds({required this.userId});
+
+  final String userId;
+
+  @override
+  Widget build(BuildContext context) {
+    final firestoreService = FirestoreService();
+    
+    return StreamBuilder<List<Hold>>(
+      stream: firestoreService.getUserHoldsStream(userId),
+      builder: (context, snapshot) {
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return const Center(child: CircularProgressIndicator());
+        }
+
+        if (snapshot.hasError) {
+          return const Center(child: Text('Error loading holds'));
+        }
+
+        final holds = snapshot.data ?? [];
+        
+        if (holds.isEmpty) {
+          return const Padding(
+            padding: EdgeInsets.all(16),
+            child: Text('No active holds'),
+          );
+        }
+
+        final recentHolds = holds.take(2).toList();
+        
+        return Column(
+          children: recentHolds.map((hold) {
+            return Padding(
+              padding: const EdgeInsets.only(bottom: 10),
+              child: _RecentReservationCard(
+                category: 'BOOK HOLD',
+                status: hold.holdStatus.name.toUpperCase(),
+                title: 'Book #${hold.bookId}',
+                subtitle: 'Queue position: ${hold.queuePosition}',
+                time: 'Created: ${_formatDate(hold.createdAt)}',
+                icon: Icons.menu_book_outlined,
+                statusColor: _getStatusColor(hold.holdStatus),
+                onTap: () => Navigator.pushNamed(context, AppRoutes.holds),
+              ),
+            );
+          }).toList(),
+        );
+      },
+    );
+  }
+
+  Color _getStatusColor(HoldStatus status) {
+    switch (status) {
+      case HoldStatus.pending:
+        return _DashboardColors.orange;
+      case HoldStatus.ready:
+        return _DashboardColors.green;
+      case HoldStatus.expired:
+        return _DashboardColors.red;
+      case HoldStatus.cancelled:
+        return _DashboardColors.muted;
+    }
+  }
+
+  String _formatDate(DateTime date) {
+    return '${date.day}/${date.month}/${date.year}';
+  }
+}
+
+class _TrendingBooks extends StatelessWidget {
+  const _TrendingBooks({required this.firestoreService});
+
+  final FirestoreService firestoreService;
+
+  @override
+  Widget build(BuildContext context) {
+    return StreamBuilder<List<Book>>(
+      stream: firestoreService.getBooksStream(),
+      builder: (context, snapshot) {
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return const Center(child: CircularProgressIndicator());
+        }
+
+        if (snapshot.hasError) {
+          return const Center(child: Text('Error loading books'));
+        }
+
+        final books = snapshot.data ?? [];
+        
+        if (books.isEmpty) {
+          return const Padding(
+            padding: EdgeInsets.all(16),
+            child: Text('No books available'),
+          );
+        }
+
+        final trendingBooks = books.take(2).toList();
+        
+        return Column(
+          children: trendingBooks.map((book) {
+            return Padding(
+              padding: const EdgeInsets.only(bottom: 10),
+              child: _TrendingBookCard(
+                title: book.title,
+                author: '${book.author}  •  ${book.genre}',
+                status: book.availableCopies > 0 ? 'Available' : 'On Loan',
+                statusColor: book.availableCopies > 0 ? _DashboardColors.green : _DashboardColors.red,
+                coverColor: book.coverColor,
+                coverIcon: Icons.menu_book,
+              ),
+            );
+          }).toList(),
+        );
+      },
     );
   }
 }
