@@ -78,14 +78,15 @@ class _DashboardPageState extends State<DashboardPage> {
                 statusColor: _DashboardColors.primary,
               ),
               const SizedBox(height: 10),
-              const _RecentReservationCard(
-                category: 'BOOK LOAN',
+              _RecentReservationCard(
+                category: 'BOOK HOLD',
                 status: 'Active',
                 title: 'Designing...',
                 subtitle: 'By Alan Co...',
                 time: 'Due in 12 days',
                 icon: Icons.menu_book_outlined,
                 statusColor: _DashboardColors.green,
+                onTap: () => Navigator.pushNamed(context, AppRoutes.holds),
               ),
               const SizedBox(height: 28),
               const _SectionHeader(
@@ -490,6 +491,7 @@ class _RecentReservationCard extends StatelessWidget {
     required this.time,
     required this.icon,
     required this.statusColor,
+    this.onTap,
   });
 
   final String category;
@@ -499,77 +501,82 @@ class _RecentReservationCard extends StatelessWidget {
   final String time;
   final IconData icon;
   final Color statusColor;
+  final VoidCallback? onTap;
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: _DashboardColors.border),
-      ),
-      child: Row(
-        children: [
-          Container(
-            width: 44,
-            height: 44,
-            decoration: BoxDecoration(
-              color: const Color(0xFFEAF5FF),
-              borderRadius: BorderRadius.circular(12),
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(16),
+      child: Container(
+        padding: const EdgeInsets.all(14),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: _DashboardColors.border),
+        ),
+        child: Row(
+          children: [
+            Container(
+              width: 44,
+              height: 44,
+              decoration: BoxDecoration(
+                color: const Color(0xFFEAF5FF),
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: Icon(icon, color: _DashboardColors.primary, size: 22),
             ),
-            child: Icon(icon, color: _DashboardColors.primary, size: 22),
-          ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  children: [
-                    Text(
-                      category,
-                      style: GoogleFonts.poppins(
-                        color: _DashboardColors.muted,
-                        fontSize: 9,
-                        fontWeight: FontWeight.w700,
-                        letterSpacing: .5,
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      Text(
+                        category,
+                        style: GoogleFonts.poppins(
+                          color: _DashboardColors.muted,
+                          fontSize: 9,
+                          fontWeight: FontWeight.w700,
+                          letterSpacing: .5,
+                        ),
                       ),
+                      const Spacer(),
+                      _StatusPill(label: status, color: statusColor),
+                    ],
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    title,
+                    style: GoogleFonts.poppins(
+                      color: _DashboardColors.text,
+                      fontSize: 13,
+                      fontWeight: FontWeight.w700,
                     ),
-                    const Spacer(),
-                    _StatusPill(label: status, color: statusColor),
-                  ],
-                ),
-                const SizedBox(height: 4),
-                Text(
-                  title,
-                  style: GoogleFonts.poppins(
-                    color: _DashboardColors.text,
-                    fontSize: 13,
-                    fontWeight: FontWeight.w700,
                   ),
-                ),
-                const SizedBox(height: 1),
-                Text(
-                  subtitle,
-                  style: GoogleFonts.poppins(
-                    color: _DashboardColors.muted,
-                    fontSize: 10.5,
+                  const SizedBox(height: 1),
+                  Text(
+                    subtitle,
+                    style: GoogleFonts.poppins(
+                      color: _DashboardColors.muted,
+                      fontSize: 10.5,
+                    ),
                   ),
-                ),
-                const SizedBox(height: 5),
-                Text(
-                  time,
-                  style: GoogleFonts.poppins(
-                    color: _DashboardColors.text,
-                    fontSize: 10.5,
-                    fontWeight: FontWeight.w600,
+                  const SizedBox(height: 5),
+                  Text(
+                    time,
+                    style: GoogleFonts.poppins(
+                      color: _DashboardColors.text,
+                      fontSize: 10.5,
+                      fontWeight: FontWeight.w600,
+                    ),
                   ),
-                ),
-              ],
+                ],
+              ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }

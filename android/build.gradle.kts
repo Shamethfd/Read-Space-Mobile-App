@@ -22,8 +22,10 @@ subprojects {
 subprojects {
     if (name == "app") return@subprojects
     afterEvaluate {
-        extensions.findByType(com.android.build.gradle.BaseExtension::class.java)?.ndkVersion =
-            "30.0.16248370"
+        extensions.findByType(com.android.build.gradle.BaseExtension::class.java)?.apply {
+            ndkVersion = "28.2.13676358"
+            compileSdkVersion(36)
+        }
     }
 }
 

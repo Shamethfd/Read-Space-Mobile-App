@@ -1,7 +1,9 @@
 import 'dart:async';
 
+import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:read_space/firebase_options.dart';
 import 'package:read_space/pages/admin_dashboard_screen.dart';
 import 'package:read_space/pages/admin_notices_screen.dart';
 import 'package:read_space/pages/book_detail_screen.dart';
@@ -18,8 +20,15 @@ import 'package:read_space/pages/pay_library_fine_screen.dart';
 import 'package:read_space/pages/publish_notice_screen.dart';
 import 'package:read_space/pages/transaction_details_screen.dart';
 import 'package:read_space/services/admin_auth_service.dart';
+import 'package:read_space/services/auth_service.dart';
 
-void main() => runApp(const ReadSpaceApp());
+void main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+  await Firebase.initializeApp(
+    options: DefaultFirebaseOptions.currentPlatform,
+  );
+  runApp(const ReadSpaceApp());
+}
 
 class AppRoutes {
   static const splash = '/';
@@ -546,12 +555,23 @@ class SplashScreen extends StatefulWidget {
 }
 
 class _SplashScreenState extends State<SplashScreen> {
+  final AuthService _authService = AuthService();
+
   @override
   void initState() {
     super.initState();
+    _checkAuthState();
+  }
+
+  void _checkAuthState() {
     Timer(const Duration(milliseconds: 2200), () {
       if (mounted) {
-        Navigator.pushReplacementNamed(context, AppRoutes.onboarding);
+        final user = _authService.currentUser;
+        if (user != null) {
+          Navigator.pushReplacementNamed(context, AppRoutes.dashboard);
+        } else {
+          Navigator.pushReplacementNamed(context, AppRoutes.onboarding);
+        }
       }
     });
   }
@@ -654,6 +674,8 @@ class _SignUpScreenState extends State<SignUpScreen> {
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
   bool _termsAccepted = false;
+  bool _isLoading = false;
+  final AuthService _authService = AuthService();
 
   @override
   void dispose() {
@@ -664,9 +686,39 @@ class _SignUpScreenState extends State<SignUpScreen> {
     super.dispose();
   }
 
-  void _submit() {
+  void _submit() async {
     if (_formKey.currentState!.validate() && _termsAccepted) {
-      Navigator.pushNamed(context, AppRoutes.login);
+      setState(() => _isLoading = true);
+      try {
+        await _authService.registerWithEmailAndPassword(
+          email: _emailController.text.trim(),
+          password: _passwordController.text,
+          fullName: _fullNameController.text.trim(),
+          studentId: _studentIdController.text.trim(),
+        );
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Account created successfully!'),
+              backgroundColor: AppTheme.success,
+            ),
+          );
+          Navigator.pushReplacementNamed(context, AppRoutes.login);
+        }
+      } catch (e) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(e.toString()),
+              backgroundColor: AppTheme.red,
+            ),
+          );
+        }
+      } finally {
+        if (mounted) {
+          setState(() => _isLoading = false);
+        }
+      }
     } else if (!_termsAccepted) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
@@ -819,8 +871,8 @@ class _SignUpScreenState extends State<SignUpScreen> {
                         ),
                         const SizedBox(height: 22),
                         PrimaryButton(
-                          label: 'Create Account',
-                          onPressed: _submit,
+                          label: _isLoading ? 'Creating Account...' : 'Create Account',
+                          onPressed: _isLoading ? null : _submit,
                         ),
                         const SizedBox(height: 18),
                         Row(
@@ -871,6 +923,8 @@ class _LoginScreenState extends State<LoginScreen> {
   final _formKey = GlobalKey<FormState>();
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
+  bool _isLoading = false;
+  final AuthService _authService = AuthService();
 
   @override
   void dispose() {
@@ -879,9 +933,31 @@ class _LoginScreenState extends State<LoginScreen> {
     super.dispose();
   }
 
-  void _submit() {
+  void _submit() async {
     if (_formKey.currentState!.validate()) {
-      Navigator.pushReplacementNamed(context, AppRoutes.dashboard);
+      setState(() => _isLoading = true);
+      try {
+        await _authService.signInWithEmailAndPassword(
+          email: _emailController.text.trim(),
+          password: _passwordController.text,
+        );
+        if (mounted) {
+          Navigator.pushReplacementNamed(context, AppRoutes.dashboard);
+        }
+      } catch (e) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(e.toString()),
+              backgroundColor: AppTheme.red,
+            ),
+          );
+        }
+      } finally {
+        if (mounted) {
+          setState(() => _isLoading = false);
+        }
+      }
     }
   }
 
@@ -969,7 +1045,10 @@ class _LoginScreenState extends State<LoginScreen> {
                           ),
                         ),
                         const SizedBox(height: 22),
-                        PrimaryButton(label: 'Sign In', onPressed: _submit),
+                        PrimaryButton(
+                          label: _isLoading ? 'Signing In...' : 'Sign In',
+                          onPressed: _isLoading ? null : _submit,
+                        ),
                         const Spacer(),
                         Padding(
                           padding: const EdgeInsets.only(top: 18),

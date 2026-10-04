@@ -1,0 +1,61 @@
+rules_version = '2';
+service firebase.storage {
+  match /b/{bucket}/o {
+    
+    // Helper function to check if user is authenticated
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+    
+    // Helper function to check if user is admin
+    function isAdmin() {
+      return isAuthenticated() && 
+             firestore.get(/databases/(default)/documents/users/$(request.auth.uid)).data.role == 'admin';
+    }
+    
+    // Helper function to check if user is the owner
+    function isOwner(userId) {
+      return isAuthenticated() && request.auth.uid == userId;
+    }
+    
+    // Book covers
+    match /books/{bookId}/{allPaths=**} {
+      // Authenticated users can read book covers
+      allow read: if isAuthenticated();
+      
+      // Only admins can upload/update book covers
+      allow write: if isAdmin();
+    }
+    
+    // Profile images
+    match /profiles/{userId}/{allPaths=**} {
+      // Users can read their own profile image
+      allow read: if isOwner(userId) || isAdmin();
+      
+      // Users can upload their own profile image
+      allow write: if isOwner(userId);
+    }
+    
+    // Notice attachments
+    match /notices/{noticeId}/{allPaths=**} {
+      // Authenticated users can read notice attachments
+      allow read: if isAuthenticated();
+      
+      // Only admins can upload notice attachments
+      allow write: if isAdmin();
+    }
+    
+    // Payment receipts
+    match /receipts/{paymentId}/{allPaths=**} {
+      // Users can read their own payment receipts
+      allow read: if isOwner(firestore.get(/databases/(default)/documents/payments/$(paymentId)).data.memberId) || isAdmin();
+      
+      // Users can upload their own payment receipts
+      allow create: if isAuthenticated() && 
+                     firestore.get(/databases/(default)/documents/payments/$(paymentId)).data.memberId == request.auth.uid;
+      
+      // Only admins can delete receipts
+      allow delete: if isAdmin();
+    }
+  }
+}

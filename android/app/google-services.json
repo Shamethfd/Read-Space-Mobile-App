@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "818021852485",
+    "project_id": "readspace-b5faf",
+    "storage_bucket": "readspace-b5faf.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:818021852485:android:d1edf2d9b4ccf419d98a2c",
+        "android_client_info": {
+          "package_name": "com.example.read_space"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBRKWJr_Lf-U6nIkA0G5Zc0KrGiSFN_8wg"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
