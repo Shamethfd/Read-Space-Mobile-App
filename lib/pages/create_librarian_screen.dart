@@ -3,7 +3,6 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:read_space/main.dart' show AppTheme;
-import 'package:read_space/services/firestore_service.dart';
 
 class CreateLibrarianScreen extends StatefulWidget {
   const CreateLibrarianScreen({super.key});

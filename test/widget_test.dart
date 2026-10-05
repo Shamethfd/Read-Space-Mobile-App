@@ -6,8 +6,9 @@ void main() {
   testWidgets('ReadSpace app launches to splash and onboarding flow', (tester) async {
     await tester.pumpWidget(const ReadSpaceApp());
 
-    expect(find.text('ReadSpace'), findsWidgets);
-    await tester.pump(const Duration(seconds: 2));
+    expect(find.byType(ReadSpaceLogo), findsOneWidget);
+    await tester.pump(const Duration(milliseconds: 2300));
+    await tester.pump();
     expect(find.text('Welcome to ReadSpace — your smart library companion.'), findsOneWidget);
   });
 }

@@ -24,7 +24,6 @@ import 'package:read_space/pages/holds_screen.dart';
 import 'package:read_space/pages/librarian_add_book_screen.dart';
 import 'package:read_space/pages/librarian_dashboard_screen.dart';
 import 'package:read_space/pages/librarian_inventory_screen.dart';
-import 'package:read_space/pages/librarian_login_screen.dart';
 import 'package:read_space/pages/librarian_profile_screen.dart';
 import 'package:read_space/pages/member_profile_page.dart';
 import 'package:read_space/pages/notice_details_screen.dart';
@@ -193,7 +192,6 @@ class ReadSpaceApp extends StatelessWidget {
           );
         }
         if (settings.name == AppRoutes.editNotice) {
-          final notice = settings.arguments;
           return PageRouteBuilder<void>(
             settings: settings,
             pageBuilder: (_, animation, _) => const EditNoticeScreen(),
@@ -216,7 +214,6 @@ class ReadSpaceApp extends StatelessWidget {
           );
         }
         if (settings.name == AppRoutes.noticeDetails) {
-          final notice = settings.arguments;
           return PageRouteBuilder<void>(
             settings: settings,
             pageBuilder: (_, animation, _) => const NoticeDetailsScreen(),
@@ -239,7 +236,6 @@ class ReadSpaceApp extends StatelessWidget {
           );
         }
         if (settings.name == AppRoutes.transactionDetails) {
-          final transaction = settings.arguments;
           return PageRouteBuilder<void>(
             settings: settings,
             pageBuilder: (_, animation, _) => const TransactionDetailsScreen(),
@@ -656,8 +652,6 @@ class SplashScreen extends StatefulWidget {
 }
 
 class _SplashScreenState extends State<SplashScreen> {
-  final AuthService _authService = AuthService();
-
   @override
   void initState() {
     super.initState();
@@ -679,7 +673,10 @@ class _SplashScreenState extends State<SplashScreen> {
       body: Stack(
         fit: StackFit.expand,
         children: [
-          Image.asset('assets/images/splash_background.jpg', fit: BoxFit.cover),
+          Image.asset(
+            'assets/images/onboarding_students.jpg',
+            fit: BoxFit.cover,
+          ),
           Container(color: Colors.black.withValues(alpha: 0.35)),
           Center(
             child: Transform.translate(

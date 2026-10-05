@@ -90,7 +90,7 @@ class Book {
       'totalCopies': totalCopies,
       'availableCopies': availableCopies,
       'holdCount': holdCount,
-      'coverColor': coverColor.value.toString(),
+      'coverColor': coverColor.toARGB32().toString(),
     };
   }
 }
