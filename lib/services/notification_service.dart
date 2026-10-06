@@ -9,24 +9,33 @@ class NotificationService {
 
   // Get all published notices for the user
   Future<List<Notice>> getUserNotifications() async {
-    return await _noticeService.getPublishedNotices();
+    try {
+      return await _noticeService.getPublishedNotices();
+    } on FirebaseException {
+      return [];
+    }
   }
 
   // Get unread notices for a specific user
   Future<List<Notice>> getUnreadNotices(String userId) async {
-    final allNotices = await _noticeService.getPublishedNotices();
-    
-    // Get read notice IDs from Firestore
-    final readStatusesSnapshot = await _firestore
-        .collection('userNoticeReadStatus')
-        .where('userId', isEqualTo: userId)
-        .get();
-    
-    final readNoticeIds = readStatusesSnapshot.docs
-        .map((doc) => doc.data()['noticeId'] as String)
-        .toSet();
+    try {
+      final allNotices = await _noticeService.getPublishedNotices();
 
-    return allNotices.where((notice) => !readNoticeIds.contains(notice.id)).toList();
+      final readStatusesSnapshot = await _firestore
+          .collection('userNoticeReadStatus')
+          .where('userId', isEqualTo: userId)
+          .get();
+
+      final readNoticeIds = readStatusesSnapshot.docs
+          .map((doc) => doc.data()['noticeId'] as String)
+          .toSet();
+
+      return allNotices
+          .where((notice) => !readNoticeIds.contains(notice.id))
+          .toList();
+    } on FirebaseException {
+      return [];
+    }
   }
 
   // Get count of unread notices for a user

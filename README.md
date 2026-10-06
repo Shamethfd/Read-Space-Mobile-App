@@ -2,6 +2,26 @@
 
 A new Flutter project.
 
+## Run the app
+
+Install Flutter, then from the project directory run:
+
+```bash
+flutter pub get
+flutter run -d chrome
+```
+
+You can also launch the macOS desktop target with `flutter run -d macos`.
+The member dashboard's **Book a Seat** action opens the interactive floor map,
+time selection, reservation review, and QR check-in flow.
+
+Run the checks with:
+
+```bash
+flutter analyze
+flutter test
+```
+
 ## Getting Started
 
 This project is a starting point for a Flutter application.

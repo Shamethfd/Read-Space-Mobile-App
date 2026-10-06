@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:read_space/main.dart';
 import 'package:read_space/models/book.dart';
 import 'package:read_space/services/firestore_service.dart';
