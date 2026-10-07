@@ -10,6 +10,7 @@ import '../services/firestore_service.dart';
 import '../models/book.dart';
 import '../models/hold.dart';
 import 'member_profile_page.dart';
+import 'seat_booking_flow.dart';
 
 class DashboardPage extends StatefulWidget {
   const DashboardPage({super.key});
@@ -71,8 +72,7 @@ class _DashboardPageState extends State<DashboardPage> {
                       title: 'Book a Seat',
                       subtitle: 'Reserve study desks',
                       color: _DashboardColors.orange,
-                      onTap: () =>
-                          Navigator.pushNamed(context, AppRoutes.seatBooking),
+                      onTap: _openSeatBooking,
                     ),
                   ),
                 ],
@@ -105,6 +105,10 @@ class _DashboardPageState extends State<DashboardPage> {
   void _handleNavigation(int index) {
     if (index == 1) {
       Navigator.pushNamed(context, AppRoutes.catalogue);
+      return;
+    }
+    if (index == 2) {
+      _openSeatBooking();
       return;
     }
     if (index == 3) {
@@ -143,6 +147,15 @@ class _DashboardPageState extends State<DashboardPage> {
       return;
     }
     setState(() => _selectedNavigationIndex = index);
+  }
+
+  void _openSeatBooking() {
+    Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        builder: (_) => const SeatBookingFlow(),
+        settings: const RouteSettings(name: AppRoutes.seatBooking),
+      ),
+    );
   }
 }
 

@@ -28,6 +28,7 @@ void main() {
     expect(find.byType(SeatBookingFlow), findsOneWidget);
     expect(find.text('Near Power Outlet', skipOffstage: false), findsOneWidget);
     expect(find.text('A-01', skipOffstage: false), findsOneWidget);
+    expect(find.text('A-01').hitTestable(), findsOneWidget);
     expect(find.text('MAIN ENTRANCE', skipOffstage: false), findsOneWidget);
   });
 }

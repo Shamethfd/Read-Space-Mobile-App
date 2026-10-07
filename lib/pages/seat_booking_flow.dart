@@ -10,6 +10,14 @@ enum _BookingStage { map, time, review, checkIn }
 
 enum _SeatState { available, occupied, reserved }
 
+class _LibrarySlot {
+  const _LibrarySlot(this.label, this.startHour, this.endHour);
+
+  final String label;
+  final int startHour;
+  final int endHour;
+}
+
 class SeatBookingFlow extends StatefulWidget {
   const SeatBookingFlow({super.key});
 
@@ -26,30 +34,46 @@ class _SeatBookingFlowState extends State<SeatBookingFlow> {
   static const _green = Color(0xFF0DBB88);
   static const _occupied = Color(0xFFFFB4B8);
   static const _reserved = Color(0xFFFF9D42);
+  static const _mapSeats = [
+    ['A-01', 'A-02', 'A-03', 'A-04'],
+    ['A-05', 'A-06', 'A-07', 'A-08'],
+    ['B-09', 'B-10', 'B-11', 'B-12'],
+    ['B-13', 'B-14', 'B-15', 'B-16'],
+  ];
 
   _BookingStage _stage = _BookingStage.map;
-  bool _groupMode = false;
   final Set<String> _filters = {'Near Power Outlet'};
-  DateTime _selectedDate = DateTime.now().add(const Duration(days: 1));
-  String _selectedSlot = '10:00 - 12:00';
-  String _selectedSeat = 'B-12';
+  late DateTime _selectedDate;
+  late final List<DateTime> _dates;
+  final Set<String> _selectedSlots = {};
+  final Map<String, _SeatState> _seatStates = {
+    for (final row in _mapSeats)
+      for (final seat in row) seat: _SeatState.available,
+  };
+  String? _selectedSeat;
   Timer? _timer;
-  int _secondsRemaining = 15 * 60;
+  int _secondsRemaining = 0;
   bool _checkedIn = false;
-  bool _expired = false;
 
-  final _dates = List<DateTime>.generate(
-    5,
-    (index) => DateTime.now().add(Duration(days: index + 1)),
-  );
   final _slots = const [
-    '08:00 - 10:00',
-    '10:00 - 12:00',
-    '12:00 - 14:00',
-    '14:00 - 16:00',
-    '16:00 - 18:00',
-    '18:00 - 20:00',
+    _LibrarySlot('08:00 - 10:00', 8, 10),
+    _LibrarySlot('10:00 - 12:00', 10, 12),
+    _LibrarySlot('12:00 - 14:00', 12, 14),
+    _LibrarySlot('14:00 - 16:00', 14, 16),
+    _LibrarySlot('16:00 - 18:00', 16, 18),
+    _LibrarySlot('18:00 - 20:00', 18, 20),
   ];
+
+  @override
+  void initState() {
+    super.initState();
+    final today = DateTime.now();
+    _selectedDate = DateTime(today.year, today.month, today.day);
+    _dates = List<DateTime>.generate(
+      5,
+      (index) => _selectedDate.add(Duration(days: index)),
+    );
+  }
 
   @override
   void dispose() {
@@ -59,18 +83,15 @@ class _SeatBookingFlowState extends State<SeatBookingFlow> {
 
   void _startCountdown() {
     _timer?.cancel();
-    _secondsRemaining = 15 * 60;
-    _expired = false;
+    _secondsRemaining = _secondsUntilBookingStart;
     _timer = Timer.periodic(const Duration(seconds: 1), (_) {
       if (!mounted || _checkedIn) return;
-      if (_secondsRemaining <= 1) {
+      final secondsUntilStart = _secondsUntilBookingStart;
+      if (secondsUntilStart <= 0) {
         _timer?.cancel();
-        setState(() {
-          _secondsRemaining = 0;
-          _expired = true;
-        });
+        setState(() => _secondsRemaining = 0);
       } else {
-        setState(() => _secondsRemaining--);
+        setState(() => _secondsRemaining = secondsUntilStart);
       }
     });
   }
@@ -82,6 +103,58 @@ class _SeatBookingFlowState extends State<SeatBookingFlow> {
 
   String get _dateLabel =>
       '${_weekday(_selectedDate.weekday)}, ${_selectedDate.day} ${_month(_selectedDate.month)} ${_selectedDate.year}';
+
+  List<_LibrarySlot> get _orderedSelectedSlots {
+    final selected = _slots
+        .where((slot) => _selectedSlots.contains(slot.label))
+        .toList();
+    selected.sort((a, b) => a.startHour.compareTo(b.startHour));
+    return selected;
+  }
+
+  String get _selectedSeatLabel => _selectedSeat ?? 'Select a seat';
+
+  String get _selectedSlotLabel {
+    final selected = _orderedSelectedSlots;
+    if (selected.isEmpty) return 'Select time';
+    if (selected.length == 1) return selected.first.label;
+    final isContinuous = selected
+        .asMap()
+        .entries
+        .skip(1)
+        .every(
+          (entry) => selected[entry.key - 1].endHour == entry.value.startHour,
+        );
+    if (isContinuous) {
+      return '${selected.first.label.split(' - ').first} - ${selected.last.label.split(' - ').last}';
+    }
+    return selected.map((slot) => slot.label).join(', ');
+  }
+
+  int get _selectedDurationHours {
+    return _orderedSelectedSlots.fold<int>(
+      0,
+      (total, slot) => total + slot.endHour - slot.startHour,
+    );
+  }
+
+  DateTime? get _bookingStart {
+    final selected = _orderedSelectedSlots;
+    if (selected.isEmpty) return null;
+    return DateTime(
+      _selectedDate.year,
+      _selectedDate.month,
+      _selectedDate.day,
+      selected.first.startHour,
+    );
+  }
+
+  int get _secondsUntilBookingStart {
+    final start = _bookingStart;
+    if (start == null) return 0;
+    final seconds = start.difference(DateTime.now()).inSeconds;
+    return seconds > 0 ? seconds : 0;
+  }
 
   String _weekday(int day) => const [
     'Monday',
@@ -121,8 +194,6 @@ class _SeatBookingFlowState extends State<SeatBookingFlow> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const _MockStatusBar(),
-                  const SizedBox(height: 8),
                   _BookingHeader(
                     title: _title,
                     subtitle: _subtitle,
@@ -138,18 +209,13 @@ class _SeatBookingFlowState extends State<SeatBookingFlow> {
           ),
         ),
       ),
-      bottomNavigationBar: Center(
-        child: ConstrainedBox(
-          constraints: const BoxConstraints(maxWidth: 390),
-          child: LibraryBottomNavigation(
-            selectedIndex: 2,
-            onSelected: (index) {
-              if (index == 0 || index == 1 || index == 3) {
-                Navigator.pop(context);
-              }
-            },
-          ),
-        ),
+      bottomNavigationBar: LibraryBottomNavigation(
+        selectedIndex: 2,
+        onSelected: (index) {
+          if (index == 0 || index == 1 || index == 3) {
+            Navigator.pop(context);
+          }
+        },
       ),
     );
   }
@@ -163,7 +229,7 @@ class _SeatBookingFlowState extends State<SeatBookingFlow> {
 
   String? get _subtitle => switch (_stage) {
     _BookingStage.map => 'University Central Library',
-    _BookingStage.time => 'Reserve Desk B-12',
+    _BookingStage.time => 'Reserve $_selectedSeatLabel',
     _BookingStage.review => null,
     _BookingStage.checkIn => null,
   };
@@ -176,53 +242,12 @@ class _SeatBookingFlowState extends State<SeatBookingFlow> {
   };
 
   Widget _buildMap() {
-    const mapSeats = [
-      ['A-01', 'A-02', 'A-03', 'A-04'],
-      ['A-05', 'A-06', 'A-07', 'A-08'],
-      ['B-09', 'B-10', 'B-11', 'B-12'],
-      ['B-13', 'B-14', 'B-15', 'B-16'],
-    ];
-    final states = [
-      _SeatState.available,
-      _SeatState.occupied,
-      _SeatState.available,
-      _SeatState.reserved,
-      _SeatState.available,
-      _SeatState.available,
-      _SeatState.occupied,
-      _SeatState.available,
-      _SeatState.reserved,
-      _SeatState.available,
-      _SeatState.occupied,
-      _SeatState.available,
-      _SeatState.available,
-      _SeatState.reserved,
-      _SeatState.available,
-      _SeatState.available,
-    ];
+    final availableSeats = _seatStates.values
+        .where((state) => state == _SeatState.available)
+        .length;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const Text(
-          'Interactive Floor Map',
-          style: TextStyle(
-            fontSize: 20,
-            fontWeight: FontWeight.w800,
-            color: _navy,
-          ),
-        ),
-        const SizedBox(height: 4),
-        const Text(
-          'University Central Library',
-          style: TextStyle(fontSize: 12, color: _muted),
-        ),
-        const SizedBox(height: 16),
-        _SegmentedControl(
-          labels: const ['Individual', 'Group'],
-          selectedIndex: _groupMode ? 1 : 0,
-          onSelected: (index) => setState(() => _groupMode = index == 1),
-        ),
-        const SizedBox(height: 12),
         Wrap(
           spacing: 8,
           runSpacing: 8,
@@ -238,12 +263,6 @@ class _SeatBookingFlowState extends State<SeatBookingFlow> {
               icon: Icons.volume_off_outlined,
               selected: _filters.contains('Quiet Zone'),
               onTap: () => _toggleFilter('Quiet Zone'),
-            ),
-            _FilterPill(
-              label: 'Window Seat',
-              icon: Icons.window_outlined,
-              selected: _filters.contains('Window Seat'),
-              onTap: () => _toggleFilter('Window Seat'),
             ),
           ],
         ),
@@ -271,14 +290,18 @@ class _SeatBookingFlowState extends State<SeatBookingFlow> {
                   childAspectRatio: 0.92,
                 ),
                 itemBuilder: (context, index) {
-                  final state = states[index];
-                  final seat = mapSeats[index ~/ 4][index % 4];
+                  final seat = _mapSeats[index ~/ 4][index % 4];
+                  final state = _seatStates[seat] ?? _SeatState.available;
                   return _SeatTile(
                     label: seat,
                     state: state,
                     onTap: state == _SeatState.available
                         ? () {
-                            setState(() => _selectedSeat = seat);
+                            setState(() {
+                              _selectedSeat = seat;
+                              _selectedSlots.clear();
+                              _checkedIn = false;
+                            });
                             _goTo(_BookingStage.time);
                           }
                         : null,
@@ -305,7 +328,7 @@ class _SeatBookingFlowState extends State<SeatBookingFlow> {
           ),
         ),
         const SizedBox(height: 14),
-        _InfoStrip(text: '9 seats available on this floor'),
+        _InfoStrip(text: '$availableSeats seats available on this floor'),
       ],
     );
   }
@@ -314,6 +337,35 @@ class _SeatBookingFlowState extends State<SeatBookingFlow> {
     setState(() {
       if (!_filters.add(filter)) _filters.remove(filter);
     });
+  }
+
+  bool _isSlotAvailable(_LibrarySlot slot) {
+    final slotStart = DateTime(
+      _selectedDate.year,
+      _selectedDate.month,
+      _selectedDate.day,
+      slot.startHour,
+    );
+    return slotStart.isAfter(DateTime.now());
+  }
+
+  void _selectDate(DateTime date) {
+    setState(() {
+      _selectedDate = date;
+      _selectedSlots.removeWhere((label) {
+        final slot = _slots.firstWhere((item) => item.label == label);
+        return !_isSlotAvailable(slot);
+      });
+    });
+  }
+
+  void _toggleSlot(_LibrarySlot slot) {
+    if (!_isSlotAvailable(slot)) return;
+    if (_selectedSlots.contains(slot.label)) {
+      setState(() => _selectedSlots.remove(slot.label));
+      return;
+    }
+    setState(() => _selectedSlots.add(slot.label));
   }
 
   Widget _buildTimeSelection() {
@@ -326,10 +378,10 @@ class _SeatBookingFlowState extends State<SeatBookingFlow> {
             children: [
               Row(
                 children: [
-                  const Expanded(
+                  Expanded(
                     child: Text(
-                      'Desk B-12',
-                      style: TextStyle(
+                      _selectedSeatLabel,
+                      style: const TextStyle(
                         fontSize: 16,
                         fontWeight: FontWeight.w800,
                         color: _navy,
@@ -340,8 +392,8 @@ class _SeatBookingFlowState extends State<SeatBookingFlow> {
                 ],
               ),
               const SizedBox(height: 10),
-              Text(
-                'Quiet Zone  🤫  ·  Power Outlet  🔌  ·  Window View  🪟',
+              const Text(
+                'Quiet Zone  ·  Power Outlet',
                 style: TextStyle(fontSize: 11, color: _muted),
               ),
             ],
@@ -359,14 +411,14 @@ class _SeatBookingFlowState extends State<SeatBookingFlow> {
                   child: _DateButton(
                     date: date,
                     selected: _sameDay(date, _selectedDate),
-                    onTap: () => setState(() => _selectedDate = date),
+                    onTap: () => _selectDate(date),
                   ),
                 ),
               ),
           ],
         ),
         const SizedBox(height: 22),
-        const _SectionLabel('Select Duration Block (2 hrs)'),
+        const _SectionLabel('Select Time Slots'),
         const SizedBox(height: 10),
         GridView.builder(
           shrinkWrap: true,
@@ -380,22 +432,28 @@ class _SeatBookingFlowState extends State<SeatBookingFlow> {
           ),
           itemBuilder: (context, index) {
             final slot = _slots[index];
+            final available = _isSlotAvailable(slot);
             return _TimeSlotButton(
-              slot: slot,
-              selected: slot == _selectedSlot,
-              onTap: () => setState(() => _selectedSlot = slot),
+              slot: slot.label,
+              selected: _selectedSlots.contains(slot.label),
+              enabled: available,
+              onTap: () => _toggleSlot(slot),
             );
           },
         ),
         const SizedBox(height: 18),
-        const _InfoStrip(
-          text: 'Booking Policy: Max 4 hours per day per student.',
+        _InfoStrip(
+          text: _selectedSlots.isEmpty
+              ? 'Past slots are unavailable. Select as many available slots as you need for the day.'
+              : 'Selected $_selectedSlotLabel · $_selectedDurationHours hours',
           icon: Icons.info_outline,
         ),
         const SizedBox(height: 20),
         _PrimaryBookingButton(
           label: 'Continue',
-          onPressed: () => _goTo(_BookingStage.review),
+          onPressed: _selectedSlots.isEmpty
+              ? null
+              : () => _goTo(_BookingStage.review),
         ),
       ],
     );
@@ -403,12 +461,12 @@ class _SeatBookingFlowState extends State<SeatBookingFlow> {
 
   Widget _buildReview() {
     final rows = [
-      ('Reserved Seat', _selectedSeat, Icons.event_seat_outlined),
+      ('Reserved Seat', _selectedSeatLabel, Icons.event_seat_outlined),
       ('Location', 'Floor 2, Central Library', Icons.location_on_outlined),
       ('Date', _dateLabel, Icons.calendar_today_outlined),
-      ('Time Slot', _selectedSlot, Icons.access_time_outlined),
+      ('Time Slot', _selectedSlotLabel, Icons.access_time_outlined),
       ('Power Outlet', 'Available', Icons.power_outlined),
-      ('Duration', '2 Hours', Icons.timelapse_outlined),
+      ('Duration', '$_selectedDurationHours Hours', Icons.timelapse_outlined),
     ];
     return Column(
       children: [
@@ -449,7 +507,14 @@ class _SeatBookingFlowState extends State<SeatBookingFlow> {
         const SizedBox(height: 20),
         _PrimaryBookingButton(
           label: 'Confirm Booking',
-          onPressed: () => _goTo(_BookingStage.checkIn),
+          onPressed: () {
+            setState(() {
+              if (_selectedSeat != null) {
+                _seatStates[_selectedSeat!] = _SeatState.reserved;
+              }
+            });
+            _goTo(_BookingStage.checkIn);
+          },
         ),
         const SizedBox(height: 14),
         TextButton(
@@ -464,17 +529,17 @@ class _SeatBookingFlowState extends State<SeatBookingFlow> {
   }
 
   Widget _buildCheckIn() {
-    final remaining =
-        '${(_secondsRemaining ~/ 60).toString().padLeft(2, '0')}:${(_secondsRemaining % 60).toString().padLeft(2, '0')}';
+    final remaining = _formatCountdown(_secondsRemaining);
+    final isReady = _secondsRemaining == 0;
     return Column(
       children: [
         _SurfaceCard(
           child: Row(
             children: [
-              const Expanded(
+              Expanded(
                 child: Text(
-                  'Desk B-12',
-                  style: TextStyle(
+                  _selectedSeatLabel,
+                  style: const TextStyle(
                     fontSize: 16,
                     fontWeight: FontWeight.w800,
                     color: _navy,
@@ -485,14 +550,14 @@ class _SeatBookingFlowState extends State<SeatBookingFlow> {
                 crossAxisAlignment: CrossAxisAlignment.end,
                 children: [
                   Text(
-                    '$_dateLabel · $_selectedSlot',
+                    '$_dateLabel · $_selectedSlotLabel',
                     style: const TextStyle(fontSize: 10, color: _muted),
                   ),
                   const SizedBox(height: 6),
                   _StatusBadge(
-                    label: _expired
-                        ? 'Released'
-                        : (_checkedIn ? 'Checked in' : 'Waiting Check-in'),
+                    label: _checkedIn
+                        ? 'Checked in'
+                        : (isReady ? 'Ready now' : 'Reserved'),
                     active: _checkedIn,
                   ),
                 ],
@@ -510,17 +575,13 @@ class _SeatBookingFlowState extends State<SeatBookingFlow> {
                 color: const Color(0xFFF3F5F7),
                 child: QrImageView(
                   data:
-                      'READSPACE-MOCK-$_selectedSeat-${_selectedDate.toIso8601String()}',
+                      'READSPACE-$_selectedSeatLabel-${_selectedDate.toIso8601String()}-$_selectedSlotLabel',
                   size: 190,
                 ),
               ),
               const SizedBox(height: 14),
               Text(
-                _expired
-                    ? 'Reservation released'
-                    : (_checkedIn
-                          ? 'Checked in successfully'
-                          : 'Scan at your seat'),
+                _checkedIn ? 'Checked in successfully' : 'Scan at your seat',
                 style: const TextStyle(
                   fontWeight: FontWeight.w700,
                   color: _navy,
@@ -530,7 +591,10 @@ class _SeatBookingFlowState extends State<SeatBookingFlow> {
           ),
         ),
         const SizedBox(height: 14),
-        _TimerPill(remaining: _expired ? '00:00' : remaining),
+        _TimerPill(
+          label: isReady ? 'Booking starts now' : 'Starts in',
+          remaining: remaining,
+        ),
         const SizedBox(height: 16),
         Container(
           width: double.infinity,
@@ -562,9 +626,11 @@ class _SeatBookingFlowState extends State<SeatBookingFlow> {
                     ),
                     const SizedBox(height: 4),
                     Text(
-                      _expired
-                          ? 'This reservation was released because the check-in timer expired.'
-                          : 'Please scan the QR code located at $_selectedSeat within ${_secondsRemaining ~/ 60 + 1} minutes of your slot start time, or your reservation will be auto-released for other students.',
+                      _checkedIn
+                          ? 'Your seat is now marked as occupied for $_selectedSlotLabel.'
+                          : (isReady
+                                ? 'Your booking window has started. Scan the QR code at $_selectedSeatLabel to check in.'
+                                : 'Your seat is reserved. The countdown shows the time remaining until $_selectedSlotLabel on $_dateLabel.'),
                       style: const TextStyle(
                         fontSize: 11,
                         height: 1.4,
@@ -579,11 +645,16 @@ class _SeatBookingFlowState extends State<SeatBookingFlow> {
         ),
         const SizedBox(height: 20),
         OutlinedButton.icon(
-          onPressed: _checkedIn || _expired
+          onPressed: _checkedIn
               ? null
               : () {
                   _timer?.cancel();
-                  setState(() => _checkedIn = true);
+                  setState(() {
+                    _checkedIn = true;
+                    if (_selectedSeat != null) {
+                      _seatStates[_selectedSeat!] = _SeatState.occupied;
+                    }
+                  });
                 },
           icon: const Icon(Icons.touch_app_outlined),
           label: const Text('Check In Manually'),
@@ -600,40 +671,22 @@ class _SeatBookingFlowState extends State<SeatBookingFlow> {
     );
   }
 
+  String _formatCountdown(int totalSeconds) {
+    const secondsPerDay = 86400;
+    final days = totalSeconds ~/ secondsPerDay;
+    final hours = (totalSeconds % secondsPerDay) ~/ 3600;
+    final minutes = (totalSeconds % 3600) ~/ 60;
+    final seconds = totalSeconds % 60;
+    if (days > 0) {
+      return '${days}d ${hours.toString().padLeft(2, '0')}h ${minutes.toString().padLeft(2, '0')}m';
+    }
+    return '${hours.toString().padLeft(2, '0')}:${minutes.toString().padLeft(2, '0')}:${seconds.toString().padLeft(2, '0')}';
+  }
+
   bool _sameDay(DateTime first, DateTime second) =>
       first.year == second.year &&
       first.month == second.month &&
       first.day == second.day;
-}
-
-class _MockStatusBar extends StatelessWidget {
-  const _MockStatusBar();
-  @override
-  Widget build(BuildContext context) => const Padding(
-    padding: EdgeInsets.fromLTRB(4, 4, 4, 0),
-    child: Row(
-      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-      children: [
-        Text(
-          '9:41 AM',
-          style: TextStyle(
-            fontSize: 11,
-            fontWeight: FontWeight.w700,
-            color: Color(0xFF17212B),
-          ),
-        ),
-        Row(
-          children: [
-            Icon(Icons.signal_cellular_alt, size: 13),
-            SizedBox(width: 4),
-            Icon(Icons.wifi, size: 13),
-            SizedBox(width: 4),
-            Icon(Icons.battery_full, size: 15),
-          ],
-        ),
-      ],
-    ),
-  );
 }
 
 class _BookingHeader extends StatelessWidget {
@@ -688,11 +741,6 @@ class _BookingHeader extends StatelessWidget {
             ],
           ),
         ),
-        const CircleAvatar(
-          radius: 19,
-          backgroundColor: Color(0xFFE6DEFF),
-          child: Icon(Icons.person_outline, color: Color(0xFF725BC2), size: 21),
-        ),
       ],
     );
   }
@@ -724,57 +772,6 @@ class _SurfaceCard extends StatelessWidget {
   );
 }
 
-class _SegmentedControl extends StatelessWidget {
-  const _SegmentedControl({
-    required this.labels,
-    required this.selectedIndex,
-    required this.onSelected,
-  });
-  final List<String> labels;
-  final int selectedIndex;
-  final ValueChanged<int> onSelected;
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(4),
-      decoration: BoxDecoration(
-        color: const Color(0xFFEAF1F7),
-        borderRadius: BorderRadius.circular(11),
-      ),
-      child: Row(
-        children: [
-          for (var index = 0; index < labels.length; index++)
-            Expanded(
-              child: GestureDetector(
-                onTap: () => onSelected(index),
-                child: Container(
-                  padding: const EdgeInsets.symmetric(vertical: 10),
-                  decoration: BoxDecoration(
-                    color: index == selectedIndex
-                        ? Colors.white
-                        : Colors.transparent,
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                  child: Text(
-                    labels[index],
-                    textAlign: TextAlign.center,
-                    style: TextStyle(
-                      fontSize: 12,
-                      fontWeight: FontWeight.w700,
-                      color: index == selectedIndex
-                          ? const Color(0xFF1683F3)
-                          : const Color(0xFF6285AC),
-                    ),
-                  ),
-                ),
-              ),
-            ),
-        ],
-      ),
-    );
-  }
-}
-
 class _FilterPill extends StatelessWidget {
   const _FilterPill({
     required this.label,
@@ -808,57 +805,6 @@ class _FilterPill extends StatelessWidget {
     );
   }
 }
-
-/*
-                      color: index == selectedIndex
-                          ? const Color(0xFF1683F3)
-                          : const Color(0xFF6285AC),
-                    ),
-                  ),
-                ),
-              ),
-            ),
-        ],
-      ),
-    );
-  }
-}
-
-class _FilterPill extends StatelessWidget {
-  const _FilterPill({
-    required this.label,
-    required this.icon,
-    required this.selected,
-    required this.onTap,
-  });
-  final String label;
-  final IconData icon;
-  final bool selected;
-  final VoidCallback onTap;
-  @override
-  Widget build(BuildContext context) {
-    final foreground = selected ? Colors.white : const Color(0xFF6285AC);
-    return ActionChip(
-      avatar: Icon(icon, size: 14, color: foreground),
-      label: Text(
-        label,
-        style: TextStyle(
-          fontSize: 10,
-          fontWeight: FontWeight.w600,
-          color: foreground,
-        ),
-      ),
-      onPressed: onTap,
-      backgroundColor: selected ? const Color(0xFF1683F3) : Colors.white,
-      side: BorderSide(
-        color: selected ? const Color(0xFF1683F3) : const Color(0xFFE5EBF0),
-      ),
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(9)),
-    );
-  }
-}
-
-*/
 
 class _LegendDot extends StatelessWidget {
   const _LegendDot({required this.color, required this.label});
@@ -1048,31 +994,41 @@ class _TimeSlotButton extends StatelessWidget {
   const _TimeSlotButton({
     required this.slot,
     required this.selected,
+    required this.enabled,
     required this.onTap,
   });
   final String slot;
   final bool selected;
+  final bool enabled;
   final VoidCallback onTap;
   @override
   Widget build(BuildContext context) => OutlinedButton.icon(
-    onPressed: onTap,
+    onPressed: enabled ? onTap : null,
     icon: Icon(
-      Icons.access_time,
+      selected ? Icons.check_circle_outline : Icons.access_time,
       size: 15,
-      color: selected ? const Color(0xFF1683F3) : const Color(0xFF6285AC),
+      color: !enabled
+          ? const Color(0xFF9CA3AF)
+          : (selected ? const Color(0xFF1683F3) : const Color(0xFF6285AC)),
     ),
     label: Text(
       slot,
       style: TextStyle(
         fontSize: 10,
-        color: selected ? const Color(0xFF1683F3) : const Color(0xFF17212B),
+        color: !enabled
+            ? const Color(0xFF9CA3AF)
+            : (selected ? const Color(0xFF1683F3) : const Color(0xFF17212B)),
         fontWeight: FontWeight.w700,
       ),
     ),
     style: OutlinedButton.styleFrom(
-      backgroundColor: selected ? const Color(0xFFE8F3FF) : Colors.white,
+      backgroundColor: !enabled
+          ? const Color(0xFFF3F4F6)
+          : (selected ? const Color(0xFFE8F3FF) : Colors.white),
       side: BorderSide(
-        color: selected ? const Color(0xFF1683F3) : const Color(0xFFE5EBF0),
+        color: !enabled
+            ? const Color(0xFFE5E7EB)
+            : (selected ? const Color(0xFF1683F3) : const Color(0xFFE5EBF0)),
       ),
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
     ),
@@ -1082,7 +1038,7 @@ class _TimeSlotButton extends StatelessWidget {
 class _PrimaryBookingButton extends StatelessWidget {
   const _PrimaryBookingButton({required this.label, required this.onPressed});
   final String label;
-  final VoidCallback onPressed;
+  final VoidCallback? onPressed;
   @override
   Widget build(BuildContext context) => SizedBox(
     width: double.infinity,
@@ -1163,7 +1119,8 @@ class _StatusBadge extends StatelessWidget {
 }
 
 class _TimerPill extends StatelessWidget {
-  const _TimerPill({required this.remaining});
+  const _TimerPill({required this.label, required this.remaining});
+  final String label;
   final String remaining;
   @override
   Widget build(BuildContext context) => Container(
@@ -1178,6 +1135,10 @@ class _TimerPill extends StatelessWidget {
       children: [
         const Icon(Icons.timer_outlined, size: 16, color: Color(0xFF1683F3)),
         const SizedBox(width: 6),
+        Text(
+          '$label ',
+          style: const TextStyle(fontSize: 11, color: Color(0xFF6285AC)),
+        ),
         Text(
           remaining,
           style: const TextStyle(

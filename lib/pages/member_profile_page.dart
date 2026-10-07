@@ -7,6 +7,7 @@ import '../widgets/library_bottom_navigation.dart';
 import '../models/user_profile.dart';
 import '../services/firestore_service.dart';
 import '../services/payment_service.dart';
+import 'seat_booking_flow.dart';
 
 typedef MemberProfileLoader = Future<MemberProfileData> Function();
 
@@ -63,7 +64,10 @@ class MemberProfileData {
     );
   }
 
-  static MemberProfileData fromUserProfile(UserProfile userProfile, double outstandingFines) {
+  static MemberProfileData fromUserProfile(
+    UserProfile userProfile,
+    double outstandingFines,
+  ) {
     return MemberProfileData(
       fullName: userProfile.fullName,
       memberId: userProfile.studentId,
@@ -168,15 +172,19 @@ class _MemberProfilePageState extends State<MemberProfilePage> {
       print('Loading profile for user: ${user.uid}');
       print('User email: ${user.email}');
       print('User display name: ${user.displayName}');
-      
+
       final userData = await _firestoreService.getUserById(user.uid);
-      print('User data from Firestore: ${userData != null ? "Found" : "Not found"}');
-      
+      print(
+        'User data from Firestore: ${userData != null ? "Found" : "Not found"}',
+      );
+
       if (userData != null) {
         print('User data keys: ${userData.keys.toList()}');
       }
-      
-      final outstandingFines = await _paymentService.getOutstandingFines(user.uid);
+
+      final outstandingFines = await _paymentService.getOutstandingFines(
+        user.uid,
+      );
       print('Outstanding fines: $outstandingFines');
 
       if (!mounted) return;
@@ -184,7 +192,10 @@ class _MemberProfilePageState extends State<MemberProfilePage> {
       if (userData != null) {
         final userProfile = UserProfile.fromJson(userData);
         setState(() {
-          _member = MemberProfileData.fromUserProfile(userProfile, outstandingFines);
+          _member = MemberProfileData.fromUserProfile(
+            userProfile,
+            outstandingFines,
+          );
           _loading = false;
         });
         print('Profile loaded successfully');
@@ -204,7 +215,8 @@ class _MemberProfilePageState extends State<MemberProfilePage> {
       print('Firebase error loading profile: ${e.code} - ${e.message}');
       if (!mounted) return;
       setState(() {
-        _error = 'Firebase configuration error. Please check google-services.json';
+        _error =
+            'Firebase configuration error. Please check google-services.json';
         _loading = false;
       });
     } catch (error) {
@@ -227,6 +239,15 @@ class _MemberProfilePageState extends State<MemberProfilePage> {
   void _handleNavigation(int index) {
     if (index == 0) {
       Navigator.of(context).maybePop();
+      return;
+    }
+    if (index == 2) {
+      Navigator.of(context).push(
+        MaterialPageRoute<void>(
+          builder: (_) => const SeatBookingFlow(),
+          settings: const RouteSettings(name: AppRoutes.seatBooking),
+        ),
+      );
     }
   }
 
@@ -520,7 +541,9 @@ class _FinesCard extends StatelessWidget {
             child: FilledButton(
               onPressed: onPayOnline,
               style: FilledButton.styleFrom(
-                backgroundColor: hasBalance ? null : theme.colorScheme.primary.withValues(alpha: 0.5),
+                backgroundColor: hasBalance
+                    ? null
+                    : theme.colorScheme.primary.withValues(alpha: 0.5),
               ),
               child: Text(hasBalance ? 'Pay Online' : 'View Payment History'),
             ),
