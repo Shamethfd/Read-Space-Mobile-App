@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../main.dart' show AppRoutes, AppTheme;
 import '../widgets/library_bottom_navigation.dart';
 import 'member_profile_page.dart';
+import 'seat_booking_flow.dart';
 
 class EditProfilePage extends StatefulWidget {
   const EditProfilePage({super.key, this.member});
@@ -100,6 +101,15 @@ class _EditProfilePageState extends State<EditProfilePage> {
     if (index == 3) return;
     if (index == 0) {
       Navigator.of(context).popUntil((route) => route.isFirst);
+      return;
+    }
+    if (index == 2) {
+      Navigator.of(context).push(
+        MaterialPageRoute<void>(
+          builder: (_) => const SeatBookingFlow(),
+          settings: const RouteSettings(name: AppRoutes.seatBooking),
+        ),
+      );
     }
   }
 

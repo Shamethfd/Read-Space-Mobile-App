@@ -196,7 +196,7 @@ class _HoldCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final statusColor;
+    final Color statusColor;
     switch (hold.holdStatus) {
       case HoldStatus.pending:
         statusColor = AppTheme.orange;
@@ -212,7 +212,7 @@ class _HoldCard extends StatelessWidget {
         break;
     }
 
-    final statusLabel;
+    final String statusLabel;
     switch (hold.holdStatus) {
       case HoldStatus.pending:
         statusLabel = 'In Queue';

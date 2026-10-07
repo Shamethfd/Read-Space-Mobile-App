@@ -24,7 +24,6 @@ import 'package:read_space/pages/holds_screen.dart';
 import 'package:read_space/pages/librarian_add_book_screen.dart';
 import 'package:read_space/pages/librarian_dashboard_screen.dart';
 import 'package:read_space/pages/librarian_inventory_screen.dart';
-import 'package:read_space/pages/librarian_login_screen.dart';
 import 'package:read_space/pages/librarian_profile_screen.dart';
 import 'package:read_space/pages/member_profile_page.dart';
 import 'package:read_space/pages/notice_details_screen.dart';
@@ -33,14 +32,13 @@ import 'package:read_space/pages/pay_library_fine_screen.dart';
 import 'package:read_space/pages/publish_notice_screen.dart';
 import 'package:read_space/pages/submit_appeal_screen.dart';
 import 'package:read_space/pages/transaction_details_screen.dart';
+import 'package:read_space/pages/seat_booking_flow.dart';
 import 'package:read_space/services/admin_auth_service.dart';
 import 'package:read_space/services/auth_service.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  await Firebase.initializeApp(
-    options: DefaultFirebaseOptions.currentPlatform,
-  );
+  await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
   runApp(const ReadSpaceApp());
 }
 
@@ -76,6 +74,7 @@ class AppRoutes {
   static const appealDetails = '/appeal-details';
   static const adminAppeals = '/admin-appeals';
   static const adminAppealDetails = '/admin-appeal-details';
+  static const seatBooking = '/seat-booking';
 }
 
 class AppTheme {
@@ -140,7 +139,9 @@ class ReadSpaceApp extends StatelessWidget {
       title: 'ReadSpace',
       debugShowCheckedModeBanner: false,
       theme: AppTheme.lightTheme,
-      initialRoute: AppRoutes.splash,
+      initialRoute: Uri.base.fragment.split('?').first == AppRoutes.seatBooking
+          ? AppRoutes.seatBooking
+          : AppRoutes.splash,
       routes: {
         AppRoutes.splash: (_) => const SplashScreen(),
         AppRoutes.onboarding: (_) => const OnboardingScreen(),
@@ -165,6 +166,7 @@ class ReadSpaceApp extends StatelessWidget {
         AppRoutes.fineAppeals: (_) => const FineAppealsScreen(),
         AppRoutes.submitAppeal: (_) => const SubmitAppealScreen(),
         AppRoutes.adminAppeals: (_) => const AdminAppealsScreen(),
+        AppRoutes.seatBooking: (_) => const SeatBookingFlow(),
       },
       onGenerateRoute: (settings) {
         if (settings.name == AppRoutes.editProfile) {
@@ -193,7 +195,6 @@ class ReadSpaceApp extends StatelessWidget {
           );
         }
         if (settings.name == AppRoutes.editNotice) {
-          final notice = settings.arguments;
           return PageRouteBuilder<void>(
             settings: settings,
             pageBuilder: (_, animation, _) => const EditNoticeScreen(),
@@ -216,7 +217,6 @@ class ReadSpaceApp extends StatelessWidget {
           );
         }
         if (settings.name == AppRoutes.noticeDetails) {
-          final notice = settings.arguments;
           return PageRouteBuilder<void>(
             settings: settings,
             pageBuilder: (_, animation, _) => const NoticeDetailsScreen(),
@@ -239,7 +239,6 @@ class ReadSpaceApp extends StatelessWidget {
           );
         }
         if (settings.name == AppRoutes.transactionDetails) {
-          final transaction = settings.arguments;
           return PageRouteBuilder<void>(
             settings: settings,
             pageBuilder: (_, animation, _) => const TransactionDetailsScreen(),
@@ -265,7 +264,8 @@ class ReadSpaceApp extends StatelessWidget {
           final bookId = settings.arguments as String?;
           return PageRouteBuilder<void>(
             settings: settings,
-            pageBuilder: (_, animation, _) => BookDetailScreen(bookId: bookId ?? ''),
+            pageBuilder: (_, animation, _) =>
+                BookDetailScreen(bookId: bookId ?? ''),
             transitionsBuilder: (_, animation, _, child) {
               final curved = CurvedAnimation(
                 parent: animation,
@@ -288,7 +288,8 @@ class ReadSpaceApp extends StatelessWidget {
           final bookId = settings.arguments as String?;
           return PageRouteBuilder<void>(
             settings: settings,
-            pageBuilder: (_, animation, _) => HoldRequestScreen(bookId: bookId ?? ''),
+            pageBuilder: (_, animation, _) =>
+                HoldRequestScreen(bookId: bookId ?? ''),
             transitionsBuilder: (_, animation, _, child) {
               final curved = CurvedAnimation(
                 parent: animation,
@@ -311,7 +312,8 @@ class ReadSpaceApp extends StatelessWidget {
           final existingAppeal = settings.arguments as FineAppeal?;
           return PageRouteBuilder<void>(
             settings: settings,
-            pageBuilder: (_, animation, _) => SubmitAppealScreen(existingAppeal: existingAppeal),
+            pageBuilder: (_, animation, _) =>
+                SubmitAppealScreen(existingAppeal: existingAppeal),
             transitionsBuilder: (_, animation, _, child) {
               final curved = CurvedAnimation(
                 parent: animation,
@@ -334,7 +336,8 @@ class ReadSpaceApp extends StatelessWidget {
           final appeal = settings.arguments as FineAppeal;
           return PageRouteBuilder<void>(
             settings: settings,
-            pageBuilder: (_, animation, _) => AppealDetailsScreen(appeal: appeal),
+            pageBuilder: (_, animation, _) =>
+                AppealDetailsScreen(appeal: appeal),
             transitionsBuilder: (_, animation, _, child) {
               final curved = CurvedAnimation(
                 parent: animation,
@@ -357,7 +360,8 @@ class ReadSpaceApp extends StatelessWidget {
           final appeal = settings.arguments as FineAppeal;
           return PageRouteBuilder<void>(
             settings: settings,
-            pageBuilder: (_, animation, _) => AdminAppealDetailsScreen(appeal: appeal),
+            pageBuilder: (_, animation, _) =>
+                AdminAppealDetailsScreen(appeal: appeal),
             transitionsBuilder: (_, animation, _, child) {
               final curved = CurvedAnimation(
                 parent: animation,
@@ -656,8 +660,6 @@ class SplashScreen extends StatefulWidget {
 }
 
 class _SplashScreenState extends State<SplashScreen> {
-  final AuthService _authService = AuthService();
-
   @override
   void initState() {
     super.initState();
@@ -679,7 +681,10 @@ class _SplashScreenState extends State<SplashScreen> {
       body: Stack(
         fit: StackFit.expand,
         children: [
-          Image.asset('assets/images/splash_background.jpg', fit: BoxFit.cover),
+          Image.asset(
+            'assets/images/onboarding_students.jpg',
+            fit: BoxFit.cover,
+          ),
           Container(color: Colors.black.withValues(alpha: 0.35)),
           Center(
             child: Transform.translate(
@@ -968,7 +973,9 @@ class _SignUpScreenState extends State<SignUpScreen> {
                         ),
                         const SizedBox(height: 22),
                         PrimaryButton(
-                          label: _isLoading ? 'Creating Account...' : 'Create Account',
+                          label: _isLoading
+                              ? 'Creating Account...'
+                              : 'Create Account',
                           onPressed: _isLoading ? null : _submit,
                         ),
                         const SizedBox(height: 18),
@@ -1038,33 +1045,39 @@ class _LoginScreenState extends State<LoginScreen> {
           email: _emailController.text.trim(),
           password: _passwordController.text,
         );
-        
+
         print('✅ Login successful');
-        
+
         // Check user role and redirect accordingly
         final user = FirebaseAuth.instance.currentUser;
         if (user != null) {
           print('👤 User UID: ${user.uid}');
-          
+
           final userDoc = await FirebaseFirestore.instance
               .collection('users')
               .doc(user.uid)
               .get();
-          
+
           print('📄 User doc exists: ${userDoc.exists}');
-          
+
           if (userDoc.exists) {
             final userData = userDoc.data() as Map<String, dynamic>;
             final role = userData['role'];
             print('👤 User role: $role');
-            
+
             if (mounted) {
               if (role == 'librarian') {
                 print('🚀 Navigating to Librarian Dashboard');
-                Navigator.pushReplacementNamed(context, AppRoutes.librarianDashboard);
+                Navigator.pushReplacementNamed(
+                  context,
+                  AppRoutes.librarianDashboard,
+                );
               } else if (role == 'admin') {
                 print('🚀 Navigating to Admin Dashboard');
-                Navigator.pushReplacementNamed(context, AppRoutes.adminDashboard);
+                Navigator.pushReplacementNamed(
+                  context,
+                  AppRoutes.adminDashboard,
+                );
               } else {
                 print('🚀 Navigating to User Dashboard');
                 Navigator.pushReplacementNamed(context, AppRoutes.dashboard);

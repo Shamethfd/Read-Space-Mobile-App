@@ -159,7 +159,7 @@ class _TransactionDetailsScreenState extends State<TransactionDetailsScreen> {
           if (subtitle != null) ...[
             const SizedBox(height: 4),
             Text(
-              subtitle!,
+              subtitle,
               style: GoogleFonts.poppins(
                 fontSize: 12,
                 color: AppTheme.secondaryText,

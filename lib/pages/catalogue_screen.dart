@@ -230,7 +230,7 @@ class _CatalogueScreenState extends State<CatalogueScreen> {
                 padding: const EdgeInsets.symmetric(horizontal: 16),
                 scrollDirection: Axis.horizontal,
                 itemCount: _chips.length,
-                separatorBuilder: (_, __) => const SizedBox(width: 6),
+                separatorBuilder: (_, _) => const SizedBox(width: 6),
                 itemBuilder: (context, i) {
                   final chip = _chips[i];
                   final selected = _activeChip == chip;
@@ -532,8 +532,8 @@ class _StatusChip extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final label;
-    final color;
+    final String label;
+    final Color color;
     switch (status) {
       case BookStatus.available:
         label = 'Available';

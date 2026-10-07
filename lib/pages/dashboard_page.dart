@@ -10,6 +10,7 @@ import '../services/firestore_service.dart';
 import '../models/book.dart';
 import '../models/hold.dart';
 import 'member_profile_page.dart';
+import 'seat_booking_flow.dart';
 
 class DashboardPage extends StatefulWidget {
   const DashboardPage({super.key});
@@ -60,7 +61,8 @@ class _DashboardPageState extends State<DashboardPage> {
                       title: 'Search Catalogue',
                       subtitle: 'Browse library',
                       color: _DashboardColors.primary,
-                      onTap: () => Navigator.pushNamed(context, AppRoutes.catalogue),
+                      onTap: () =>
+                          Navigator.pushNamed(context, AppRoutes.catalogue),
                     ),
                   ),
                   const SizedBox(width: 12),
@@ -70,6 +72,7 @@ class _DashboardPageState extends State<DashboardPage> {
                       title: 'Book a Seat',
                       subtitle: 'Reserve study desks',
                       color: _DashboardColors.orange,
+                      onTap: _openSeatBooking,
                     ),
                   ),
                 ],
@@ -85,10 +88,7 @@ class _DashboardPageState extends State<DashboardPage> {
               else
                 const Center(child: Text('Log in to view reservations')),
               const SizedBox(height: 28),
-              const _SectionHeader(
-                title: 'Trending Books',
-                action: 'View All',
-              ),
+              const _SectionHeader(title: 'Trending Books', action: 'View All'),
               const SizedBox(height: 12),
               _TrendingBooks(firestoreService: _firestoreService),
             ],
@@ -105,6 +105,10 @@ class _DashboardPageState extends State<DashboardPage> {
   void _handleNavigation(int index) {
     if (index == 1) {
       Navigator.pushNamed(context, AppRoutes.catalogue);
+      return;
+    }
+    if (index == 2) {
+      _openSeatBooking();
       return;
     }
     if (index == 3) {
@@ -143,6 +147,15 @@ class _DashboardPageState extends State<DashboardPage> {
       return;
     }
     setState(() => _selectedNavigationIndex = index);
+  }
+
+  void _openSeatBooking() {
+    Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        builder: (_) => const SeatBookingFlow(),
+        settings: const RouteSettings(name: AppRoutes.seatBooking),
+      ),
+    );
   }
 }
 
@@ -385,38 +398,38 @@ class _QuickActionCard extends StatelessWidget {
             ),
           ],
         ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        children: [
-          Icon(icon, color: Colors.white, size: 25),
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                title,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: GoogleFonts.poppins(
-                  color: Colors.white,
-                  fontSize: 13,
-                  fontWeight: FontWeight.w700,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            Icon(icon, color: Colors.white, size: 25),
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  title,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: GoogleFonts.poppins(
+                    color: Colors.white,
+                    fontSize: 13,
+                    fontWeight: FontWeight.w700,
+                  ),
                 ),
-              ),
-              const SizedBox(height: 2),
-              Text(
-                subtitle,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: GoogleFonts.poppins(
-                  color: Colors.white.withValues(alpha: 0.78),
-                  fontSize: 10,
+                const SizedBox(height: 2),
+                Text(
+                  subtitle,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: GoogleFonts.poppins(
+                    color: Colors.white.withValues(alpha: 0.78),
+                    fontSize: 10,
+                  ),
                 ),
-              ),
-            ],
-          ),
-        ],
-      ),
+              ],
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -678,7 +691,7 @@ class _RecentHolds extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final firestoreService = FirestoreService();
-    
+
     return StreamBuilder<List<Hold>>(
       stream: firestoreService.getUserHoldsStream(userId),
       builder: (context, snapshot) {
@@ -691,7 +704,7 @@ class _RecentHolds extends StatelessWidget {
         }
 
         final holds = snapshot.data ?? [];
-        
+
         if (holds.isEmpty) {
           return const Padding(
             padding: EdgeInsets.all(16),
@@ -700,7 +713,7 @@ class _RecentHolds extends StatelessWidget {
         }
 
         final recentHolds = holds.take(2).toList();
-        
+
         return Column(
           children: recentHolds.map((hold) {
             return Padding(
@@ -759,7 +772,7 @@ class _TrendingBooks extends StatelessWidget {
         }
 
         final books = snapshot.data ?? [];
-        
+
         if (books.isEmpty) {
           return const Padding(
             padding: EdgeInsets.all(16),
@@ -768,7 +781,7 @@ class _TrendingBooks extends StatelessWidget {
         }
 
         final trendingBooks = books.take(2).toList();
-        
+
         return Column(
           children: trendingBooks.map((book) {
             return Padding(
@@ -777,7 +790,9 @@ class _TrendingBooks extends StatelessWidget {
                 title: book.title,
                 author: '${book.author}  •  ${book.genre}',
                 status: book.availableCopies > 0 ? 'Available' : 'On Loan',
-                statusColor: book.availableCopies > 0 ? _DashboardColors.green : _DashboardColors.red,
+                statusColor: book.availableCopies > 0
+                    ? _DashboardColors.green
+                    : _DashboardColors.red,
                 coverColor: book.coverColor,
                 coverIcon: Icons.menu_book,
               ),
