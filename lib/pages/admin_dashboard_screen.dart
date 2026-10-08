@@ -35,8 +35,6 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                     const SizedBox(height: 24),
                     _buildAppealsManagement(),
                     const SizedBox(height: 24),
-                    _buildLibrarianManagement(),
-                    const SizedBox(height: 24),
                     _buildOverdueAlerts(),
                     const SizedBox(height: 24),
                     _buildRecentTransactions(),
@@ -457,7 +455,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
     return GestureDetector(
       onTap: () {
         if (index == 1) {
-          Navigator.pushNamed(context, '/admin-notices');
+          Navigator.pushNamed(context, AppRoutes.createLibrarian);
         } else {
           setState(() {
             _currentIndex = index;

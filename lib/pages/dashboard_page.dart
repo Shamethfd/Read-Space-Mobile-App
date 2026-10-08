@@ -77,10 +77,38 @@ class _DashboardPageState extends State<DashboardPage> {
                   ),
                 ],
               ),
+              const SizedBox(height: 12),
+              Row(
+                children: [
+                  Expanded(
+                    child: _QuickActionCard(
+                      icon: Icons.bookmark_rounded,
+                      title: 'My Reservations',
+                      subtitle: 'View bookings & holds',
+                      color: const Color(0xFF16A34A),
+                      onTap: () =>
+                          Navigator.pushNamed(context, AppRoutes.myReservations),
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: _QuickActionCard(
+                      icon: Icons.notifications_rounded,
+                      title: 'Notices',
+                      subtitle: 'Library updates',
+                      color: const Color(0xFF8B5CF6),
+                      onTap: () =>
+                          Navigator.pushNamed(context, AppRoutes.notifications),
+                    ),
+                  ),
+                ],
+              ),
               const SizedBox(height: 28),
-              const _SectionHeader(
+              _SectionHeader(
                 title: 'Recent Reservations',
                 action: 'See All',
+                onAction: () =>
+                    Navigator.pushNamed(context, AppRoutes.myReservations),
               ),
               const SizedBox(height: 12),
               if (_currentUserId != null)
@@ -436,10 +464,11 @@ class _QuickActionCard extends StatelessWidget {
 }
 
 class _SectionHeader extends StatelessWidget {
-  const _SectionHeader({required this.title, required this.action});
+  const _SectionHeader({required this.title, required this.action, this.onAction});
 
   final String title;
   final String action;
+  final VoidCallback? onAction;
 
   @override
   Widget build(BuildContext context) {
@@ -456,7 +485,7 @@ class _SectionHeader extends StatelessWidget {
           ),
         ),
         TextButton(
-          onPressed: () {},
+          onPressed: onAction ?? () {},
           style: TextButton.styleFrom(
             padding: EdgeInsets.zero,
             minimumSize: Size.zero,

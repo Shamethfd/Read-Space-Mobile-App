@@ -43,16 +43,16 @@ class _CreateLibrarianScreenState extends State<CreateLibrarianScreen> {
     setState(() => _isLoading = true);
 
     try {
-      // Create Firebase Auth user
+      // Create Firebase Auth user (convert email to lowercase for case-insensitive matching)
       final userCredential = await _auth.createUserWithEmailAndPassword(
-        email: _emailController.text.trim(),
+        email: _emailController.text.trim().toLowerCase(),
         password: _passwordController.text,
       );
 
       // Create Firestore user document
       await _firestore.collection('users').doc(userCredential.user!.uid).set({
         'fullName': _fullNameController.text.trim(),
-        'email': _emailController.text.trim(),
+        'email': _emailController.text.trim().toLowerCase(),
         'employeeId': _employeeIdController.text.trim(),
         'phoneNumber': _phoneController.text.trim(),
         'role': 'librarian',

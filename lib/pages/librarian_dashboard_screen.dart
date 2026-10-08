@@ -42,6 +42,10 @@ class _LibrarianDashboardScreenState extends State<LibrarianDashboardScreen> {
                     _buildPendingPickups(),
                     const SizedBox(height: 16),
                     _buildRoomOccupancy(),
+                    const SizedBox(height: 16),
+                    _buildSeatOccupancyCard(),
+                    const SizedBox(height: 16),
+                    _buildActionButtons(),
                   ],
                 ),
               ),
@@ -430,6 +434,129 @@ class _LibrarianDashboardScreenState extends State<LibrarianDashboardScreen> {
     );
   }
 
+  Widget _buildSeatOccupancyCard() {
+    return GestureDetector(
+      onTap: () => Navigator.pushNamed(context, AppRoutes.seatOccupancy),
+      child: Container(
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: AppTheme.border),
+        ),
+        child: Row(
+          children: [
+            Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: AppTheme.primaryBlue.withValues(alpha: 0.1),
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: Icon(
+                Icons.event_seat_outlined,
+                color: AppTheme.primaryBlue,
+                size: 24,
+              ),
+            ),
+            const SizedBox(width: 16),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Seat Occupancy',
+                    style: GoogleFonts.poppins(
+                      fontSize: 16,
+                      fontWeight: FontWeight.w600,
+                      color: AppTheme.textPrimary,
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    'View real-time seat status',
+                    style: GoogleFonts.poppins(
+                      fontSize: 12,
+                      color: AppTheme.secondaryText,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            Icon(
+              Icons.arrow_forward_ios,
+              color: AppTheme.secondaryText,
+              size: 16,
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildActionButtons() {
+    return Row(
+      children: [
+        Expanded(
+          child: InkWell(
+            onTap: () => Navigator.pushNamed(context, AppRoutes.adminAppeals),
+            borderRadius: BorderRadius.circular(12),
+            child: Container(
+              padding: const EdgeInsets.symmetric(vertical: 14),
+              decoration: BoxDecoration(
+                color: AppTheme.orange,
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  const Icon(Icons.gavel_outlined, color: Colors.white, size: 20),
+                  const SizedBox(width: 8),
+                  Text(
+                    'View Appeals',
+                    style: GoogleFonts.poppins(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w600,
+                      color: Colors.white,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+        const SizedBox(width: 12),
+        Expanded(
+          child: InkWell(
+            onTap: () => Navigator.pushNamed(context, AppRoutes.adminNotices),
+            borderRadius: BorderRadius.circular(12),
+            child: Container(
+              padding: const EdgeInsets.symmetric(vertical: 14),
+              decoration: BoxDecoration(
+                color: AppTheme.primaryBlue,
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  const Icon(Icons.add_circle_outline, color: Colors.white, size: 20),
+                  const SizedBox(width: 8),
+                  Text(
+                    'Publish Notice',
+                    style: GoogleFonts.poppins(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w600,
+                      color: Colors.white,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
   Widget _buildBottomNavigation() {
     return Container(
       padding: const EdgeInsets.symmetric(vertical: 12),
@@ -478,6 +605,8 @@ class _LibrarianDashboardScreenState extends State<LibrarianDashboardScreen> {
         setState(() => _currentIndex = index);
         if (index == 1) {
           Navigator.pushNamed(context, AppRoutes.librarianInventory);
+        } else if (index == 2) {
+          Navigator.pushNamed(context, AppRoutes.librarianAnalytics);
         } else if (index == 3) {
           Navigator.pushNamed(context, AppRoutes.librarianProfile);
         }

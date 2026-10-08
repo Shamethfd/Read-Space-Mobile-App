@@ -25,7 +25,9 @@ import 'package:read_space/pages/librarian_add_book_screen.dart';
 import 'package:read_space/pages/librarian_dashboard_screen.dart';
 import 'package:read_space/pages/librarian_inventory_screen.dart';
 import 'package:read_space/pages/librarian_profile_screen.dart';
+import 'package:read_space/pages/manage_seat_reservation_screen.dart';
 import 'package:read_space/pages/member_profile_page.dart';
+import 'package:read_space/pages/my_reservations_screen.dart';
 import 'package:read_space/pages/notice_details_screen.dart';
 import 'package:read_space/pages/notifications_screen.dart';
 import 'package:read_space/pages/pay_library_fine_screen.dart';
@@ -33,6 +35,8 @@ import 'package:read_space/pages/publish_notice_screen.dart';
 import 'package:read_space/pages/submit_appeal_screen.dart';
 import 'package:read_space/pages/transaction_details_screen.dart';
 import 'package:read_space/pages/seat_booking_flow.dart';
+import 'package:read_space/pages/librarian_analytics_screen.dart';
+import 'package:read_space/pages/seat_occupancy_screen.dart';
 import 'package:read_space/services/admin_auth_service.dart';
 import 'package:read_space/services/auth_service.dart';
 
@@ -75,6 +79,10 @@ class AppRoutes {
   static const adminAppeals = '/admin-appeals';
   static const adminAppealDetails = '/admin-appeal-details';
   static const seatBooking = '/seat-booking';
+  static const myReservations = '/my-reservations';
+  static const manageSeatReservation = '/manage-seat-reservation';
+  static const librarianAnalytics = '/librarian-analytics';
+  static const seatOccupancy = '/seat-occupancy';
 }
 
 class AppTheme {
@@ -167,6 +175,9 @@ class ReadSpaceApp extends StatelessWidget {
         AppRoutes.submitAppeal: (_) => const SubmitAppealScreen(),
         AppRoutes.adminAppeals: (_) => const AdminAppealsScreen(),
         AppRoutes.seatBooking: (_) => const SeatBookingFlow(),
+        AppRoutes.myReservations: (_) => const MyReservationsScreen(),
+        AppRoutes.librarianAnalytics: (_) => const LibrarianAnalyticsScreen(),
+        AppRoutes.seatOccupancy: (_) => const SeatOccupancyScreen(),
       },
       onGenerateRoute: (settings) {
         if (settings.name == AppRoutes.editProfile) {
@@ -362,6 +373,30 @@ class ReadSpaceApp extends StatelessWidget {
             settings: settings,
             pageBuilder: (_, animation, _) =>
                 AdminAppealDetailsScreen(appeal: appeal),
+            transitionsBuilder: (_, animation, _, child) {
+              final curved = CurvedAnimation(
+                parent: animation,
+                curve: Curves.easeOutCubic,
+              );
+              return FadeTransition(
+                opacity: curved,
+                child: SlideTransition(
+                  position: Tween<Offset>(
+                    begin: const Offset(0.04, 0),
+                    end: Offset.zero,
+                  ).animate(curved),
+                  child: child,
+                ),
+              );
+            },
+          );
+        }
+        if (settings.name == AppRoutes.manageSeatReservation) {
+          final bookingId = settings.arguments as String?;
+          return PageRouteBuilder<void>(
+            settings: settings,
+            pageBuilder: (_, animation, _) =>
+                ManageSeatReservationScreen(bookingId: bookingId ?? ''),
             transitionsBuilder: (_, animation, _, child) {
               final curved = CurvedAnimation(
                 parent: animation,

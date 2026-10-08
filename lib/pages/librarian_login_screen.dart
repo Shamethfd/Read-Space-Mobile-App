@@ -34,9 +34,9 @@ class _LibrarianLoginScreenState extends State<LibrarianLoginScreen> {
     setState(() => _isLoading = true);
 
     try {
-      // Sign in with Firebase Auth
+      // Sign in with Firebase Auth (convert email to lowercase for case-insensitive matching)
       final userCredential = await _auth.signInWithEmailAndPassword(
-        email: _emailController.text.trim(),
+        email: _emailController.text.trim().toLowerCase(),
         password: _passwordController.text,
       );
 

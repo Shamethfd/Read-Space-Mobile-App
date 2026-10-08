@@ -4,11 +4,11 @@ class LibraryBottomNavigation extends StatelessWidget {
   const LibraryBottomNavigation({
     super.key,
     required this.selectedIndex,
-    required this.onSelected,
+    this.onSelected,
   });
 
   final int selectedIndex;
-  final ValueChanged<int> onSelected;
+  final ValueChanged<int>? onSelected;
 
   @override
   Widget build(BuildContext context) {
@@ -37,7 +37,7 @@ class LibraryBottomNavigation extends StatelessWidget {
             for (var index = 0; index < items.length; index++)
               Expanded(
                 child: InkWell(
-                  onTap: () => onSelected(index),
+                  onTap: onSelected != null ? () => onSelected!(index) : null,
                   child: Column(
                     mainAxisSize: MainAxisSize.min,
                     children: [

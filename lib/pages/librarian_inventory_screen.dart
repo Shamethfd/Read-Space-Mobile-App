@@ -3,6 +3,8 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:read_space/main.dart' show AppTheme, AppRoutes;
 import 'package:read_space/services/firestore_service.dart';
 import 'package:read_space/models/book.dart';
+import 'package:read_space/models/seat.dart';
+import 'package:read_space/models/booking.dart';
 
 class LibrarianInventoryScreen extends StatefulWidget {
   const LibrarianInventoryScreen({super.key});
@@ -353,6 +355,44 @@ class _LibrarianInventoryScreenState extends State<LibrarianInventoryScreen> {
   }
 
   Widget _buildDesksTab() {
+    return StreamBuilder<List<Seat>>(
+      stream: _firestoreService.getSeatsStream(),
+      builder: (context, seatsSnapshot) {
+        return StreamBuilder<List<Booking>>(
+          stream: _firestoreService.getAllBookingsStream(),
+          builder: (context, bookingsSnapshot) {
+            final seats = seatsSnapshot.data ?? [];
+            final bookings = bookingsSnapshot.data ?? [];
+
+            if (seatsSnapshot.connectionState == ConnectionState.waiting) {
+              return _buildLoadingState();
+            }
+
+            if (seatsSnapshot.hasError) {
+              return _buildErrorState(seatsSnapshot.error.toString());
+            }
+
+            if (seats.isEmpty) {
+              return _buildEmptyState();
+            }
+
+            return _buildSeatManagementContent(seats, bookings);
+          },
+        );
+      },
+    );
+  }
+
+  Widget _buildSeatManagementContent(List<Seat> seats, List<Booking> bookings) {
+    final totalDesks = seats.length;
+    final availableCount = seats.where((s) => s.status == SeatStatus.available).length;
+    final occupiedCount = seats.where((s) => s.status == SeatStatus.occupied).length;
+    final unavailableCount = seats.where((s) => 
+      s.status == SeatStatus.damaged || 
+      s.status == SeatStatus.maintenance || 
+      s.status == SeatStatus.unavailable
+    ).length;
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -368,7 +408,7 @@ class _LibrarianInventoryScreenState extends State<LibrarianInventoryScreen> {
               ),
             ),
             Text(
-              'Total Desks: 0',
+              'Total Desks: $totalDesks',
               style: GoogleFonts.poppins(
                 fontSize: 13,
                 fontWeight: FontWeight.w500,
@@ -378,43 +418,388 @@ class _LibrarianInventoryScreenState extends State<LibrarianInventoryScreen> {
           ],
         ),
         const SizedBox(height: 12),
-        Container(
-          padding: const EdgeInsets.all(32),
-          decoration: BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.circular(12),
-            border: Border.all(color: AppTheme.border),
+        _buildStatusSummary(availableCount, occupiedCount, unavailableCount),
+        const SizedBox(height: 16),
+        _buildSeatList(seats, bookings),
+      ],
+    );
+  }
+
+  Widget _buildStatusSummary(int available, int occupied, int unavailable) {
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: AppTheme.border),
+      ),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceAround,
+        children: [
+          _buildStatusCount('Available', available, AppTheme.success),
+          _buildStatusCount('Occupied', occupied, AppTheme.red),
+          _buildStatusCount('Unavailable', unavailable, const Color(0xFFF59E0B)),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildStatusCount(String label, int count, Color color) {
+    return Column(
+      children: [
+        Text(
+          count.toString(),
+          style: GoogleFonts.poppins(
+            fontSize: 20,
+            fontWeight: FontWeight.w700,
+            color: color,
           ),
-          child: Center(
-            child: Column(
-              children: [
-                Icon(
-                  Icons.event_seat_outlined,
-                  size: 48,
-                  color: AppTheme.secondaryText,
-                ),
-                const SizedBox(height: 12),
-                Text(
-                  'No desks configured',
-                  style: GoogleFonts.poppins(
-                    fontSize: 14,
-                    color: AppTheme.secondaryText,
-                  ),
-                ),
-                const SizedBox(height: 8),
-                Text(
-                  'Desk management coming soon',
-                  style: GoogleFonts.poppins(
-                    fontSize: 12,
-                    color: AppTheme.secondaryText,
-                  ),
-                ),
-              ],
-            ),
+        ),
+        const SizedBox(height: 2),
+        Text(
+          label,
+          style: GoogleFonts.poppins(
+            fontSize: 11,
+            fontWeight: FontWeight.w500,
+            color: AppTheme.secondaryText,
           ),
         ),
       ],
     );
+  }
+
+  Widget _buildSeatList(List<Seat> seats, List<Booking> bookings) {
+    return Container(
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: AppTheme.border),
+      ),
+      child: Column(
+        children: [
+          _buildSeatListHeader(),
+          const Divider(height: 1, color: AppTheme.border),
+          ListView.separated(
+            shrinkWrap: true,
+            physics: const NeverScrollableScrollPhysics(),
+            itemCount: seats.length,
+            separatorBuilder: (_, __) => const Divider(height: 1, color: AppTheme.border),
+            itemBuilder: (context, index) {
+              final seat = seats[index];
+              final currentStatus = _getSeatStatus(seat, bookings);
+              return _buildSeatRow(seat, currentStatus, bookings);
+            },
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildSeatListHeader() {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+      color: const Color(0xFFF8F9FA),
+      child: Row(
+        children: [
+          Expanded(
+            flex: 2,
+            child: Text(
+              'Seat No.',
+              style: GoogleFonts.poppins(
+                fontSize: 12,
+                fontWeight: FontWeight.w600,
+                color: AppTheme.secondaryText,
+              ),
+            ),
+          ),
+          Expanded(
+            flex: 2,
+            child: Text(
+              'Status',
+              style: GoogleFonts.poppins(
+                fontSize: 12,
+                fontWeight: FontWeight.w600,
+                color: AppTheme.secondaryText,
+              ),
+            ),
+          ),
+          Expanded(
+            flex: 3,
+            child: Text(
+              'Damaged/Unavailable',
+              textAlign: TextAlign.center,
+              style: GoogleFonts.poppins(
+                fontSize: 12,
+                fontWeight: FontWeight.w600,
+                color: AppTheme.secondaryText,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildSeatRow(Seat seat, SeatStatus currentStatus, List<Booking> bookings) {
+    final isUnavailable = seat.status == SeatStatus.damaged || 
+                          seat.status == SeatStatus.maintenance || 
+                          seat.status == SeatStatus.unavailable;
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+      child: Row(
+        children: [
+          Expanded(
+            flex: 2,
+            child: Text(
+              seat.seatNumber,
+              style: GoogleFonts.poppins(
+                fontSize: 13,
+                fontWeight: FontWeight.w600,
+                color: AppTheme.textPrimary,
+              ),
+            ),
+          ),
+          Expanded(
+            flex: 2,
+            child: _buildStatusBadge(currentStatus),
+          ),
+          Expanded(
+            flex: 3,
+            child: Center(
+              child: Switch(
+                value: isUnavailable,
+                onChanged: (value) {
+                  _toggleSeatStatus(seat, value);
+                },
+                activeColor: AppTheme.red,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildStatusBadge(SeatStatus status) {
+    Color color;
+    String label;
+
+    switch (status) {
+      case SeatStatus.available:
+        color = AppTheme.success;
+        label = 'Available';
+        break;
+      case SeatStatus.occupied:
+        color = AppTheme.red;
+        label = 'Occupied';
+        break;
+      case SeatStatus.damaged:
+        color = AppTheme.red;
+        label = 'Damaged';
+        break;
+      case SeatStatus.maintenance:
+        color = const Color(0xFFF59E0B);
+        label = 'Maintenance';
+        break;
+      case SeatStatus.unavailable:
+        color = const Color(0xFF8A929D);
+        label = 'Unavailable';
+        break;
+    }
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.1),
+        borderRadius: BorderRadius.circular(6),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Container(
+            width: 6,
+            height: 6,
+            decoration: BoxDecoration(
+              color: color,
+              shape: BoxShape.circle,
+            ),
+          ),
+          const SizedBox(width: 6),
+          Text(
+            label,
+            style: GoogleFonts.poppins(
+              fontSize: 11,
+              fontWeight: FontWeight.w600,
+              color: color,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  SeatStatus _getSeatStatus(Seat seat, List<Booking> bookings) {
+    // If seat is marked as damaged/maintenance/unavailable, return that status
+    if (seat.status == SeatStatus.damaged) return SeatStatus.damaged;
+    if (seat.status == SeatStatus.maintenance) return SeatStatus.maintenance;
+    if (seat.status == SeatStatus.unavailable) return SeatStatus.unavailable;
+
+    // Check if seat has an active booking
+    final now = DateTime.now();
+    final activeBooking = bookings.any((b) => 
+      b.seatId == seat.seatNumber &&
+      b.status == BookingStatus.confirmed &&
+      b.startTime.isBefore(now) &&
+      b.endTime.isAfter(now)
+    );
+
+    return activeBooking ? SeatStatus.occupied : SeatStatus.available;
+  }
+
+  Future<void> _toggleSeatStatus(Seat seat, bool isUnavailable) async {
+    try {
+      final newStatus = isUnavailable ? SeatStatus.damaged : SeatStatus.available;
+      await _firestoreService.updateSeatStatus(seat.id, newStatus);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Seat ${seat.seatNumber} status updated'),
+            backgroundColor: AppTheme.success,
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Failed to update seat status: $e'),
+            backgroundColor: AppTheme.red,
+          ),
+        );
+      }
+    }
+  }
+
+  Widget _buildLoadingState() {
+    return Container(
+      padding: const EdgeInsets.all(32),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: AppTheme.border),
+      ),
+      child: const Center(
+        child: Column(
+          children: [
+            CircularProgressIndicator(),
+            SizedBox(height: 12),
+            Text('Loading desks...'),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildErrorState(String error) {
+    return Container(
+      padding: const EdgeInsets.all(32),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: AppTheme.border),
+      ),
+      child: Center(
+        child: Column(
+          children: [
+            Icon(Icons.error_outline, size: 48, color: AppTheme.red),
+            const SizedBox(height: 12),
+            Text(
+              'Unable to load desk information.',
+              style: GoogleFonts.poppins(
+                fontSize: 14,
+                color: AppTheme.secondaryText,
+              ),
+            ),
+            const SizedBox(height: 8),
+            ElevatedButton(
+              onPressed: () => setState(() {}),
+              child: const Text('Retry'),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildEmptyState() {
+    return Container(
+      padding: const EdgeInsets.all(32),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: AppTheme.border),
+      ),
+      child: Center(
+        child: Column(
+          children: [
+            Icon(
+              Icons.event_seat_outlined,
+              size: 48,
+              color: AppTheme.secondaryText,
+            ),
+            const SizedBox(height: 12),
+            Text(
+              'No desks have been configured yet.',
+              style: GoogleFonts.poppins(
+                fontSize: 14,
+                color: AppTheme.secondaryText,
+              ),
+            ),
+            const SizedBox(height: 16),
+            ElevatedButton.icon(
+              onPressed: _initializeDefaultSeats,
+              icon: const Icon(Icons.add),
+              label: Text(
+                'Initialize Default Seats',
+                style: GoogleFonts.poppins(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: AppTheme.primaryBlue,
+                foregroundColor: Colors.white,
+                padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Future<void> _initializeDefaultSeats() async {
+    try {
+      await _firestoreService.initializeDefaultSeats();
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Default seats initialized successfully'),
+            backgroundColor: AppTheme.success,
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Failed to initialize seats: $e'),
+            backgroundColor: AppTheme.red,
+          ),
+        );
+      }
+    }
   }
 
   Widget _buildBottomNavigation() {

@@ -3,8 +3,12 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:qr_flutter/qr_flutter.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 
 import '../widgets/library_bottom_navigation.dart';
+import '../services/firestore_service.dart';
+import '../models/booking.dart';
+import '../models/seat.dart';
 
 enum _BookingStage { map, time, review, checkIn }
 
@@ -34,26 +38,22 @@ class _SeatBookingFlowState extends State<SeatBookingFlow> {
   static const _green = Color(0xFF0DBB88);
   static const _occupied = Color(0xFFFFB4B8);
   static const _reserved = Color(0xFFFF9D42);
-  static const _mapSeats = [
-    ['A-01', 'A-02', 'A-03', 'A-04'],
-    ['A-05', 'A-06', 'A-07', 'A-08'],
-    ['B-09', 'B-10', 'B-11', 'B-12'],
-    ['B-13', 'B-14', 'B-15', 'B-16'],
-  ];
 
+  final FirestoreService _firestoreService = FirestoreService();
   _BookingStage _stage = _BookingStage.map;
   final Set<String> _filters = {'Near Power Outlet'};
   late DateTime _selectedDate;
   late final List<DateTime> _dates;
   final Set<String> _selectedSlots = {};
-  final Map<String, _SeatState> _seatStates = {
-    for (final row in _mapSeats)
-      for (final seat in row) seat: _SeatState.available,
-  };
+  Map<String, _SeatState> _seatStates = {};
+  List<Seat> _seats = [];
+  List<List<String>> _mapSeats = [];
   String? _selectedSeat;
   Timer? _timer;
   int _secondsRemaining = 0;
   bool _checkedIn = false;
+  bool _isSaving = false;
+  bool _isLoadingSeats = true;
 
   final _slots = const [
     _LibrarySlot('08:00 - 10:00', 8, 10),
@@ -73,6 +73,67 @@ class _SeatBookingFlowState extends State<SeatBookingFlow> {
       5,
       (index) => _selectedDate.add(Duration(days: index)),
     );
+    _loadSeats();
+  }
+
+  Future<void> _loadSeats() async {
+    try {
+      final seats = await _firestoreService.getSeats();
+      if (mounted) {
+        setState(() {
+          _seats = seats;
+          _mapSeats = _organizeSeatsIntoMap(seats);
+          _seatStates = {
+            for (final seat in seats)
+              seat.seatNumber: _mapSeatStateFromStatus(seat.status),
+          };
+          _isLoadingSeats = false;
+        });
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() => _isLoadingSeats = false);
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Failed to load seats: $e')),
+        );
+      }
+    }
+  }
+
+  List<List<String>> _organizeSeatsIntoMap(List<Seat> seats) {
+    final Map<String, List<String>> rowMap = {};
+    for (final seat in seats) {
+      if (!rowMap.containsKey(seat.row)) {
+        rowMap[seat.row] = [];
+      }
+      rowMap[seat.row]!.add(seat.seatNumber);
+    }
+    final sortedRows = rowMap.keys.toList()..sort();
+    return sortedRows.map((row) {
+      final rowSeats = rowMap[row]!..sort();
+      return rowSeats;
+    }).toList();
+  }
+
+  _SeatState _mapSeatStateFromStatus(SeatStatus status) {
+    switch (status) {
+      case SeatStatus.available:
+        return _SeatState.available;
+      case SeatStatus.occupied:
+        return _SeatState.occupied;
+      case SeatStatus.damaged:
+      case SeatStatus.maintenance:
+      case SeatStatus.unavailable:
+        return _SeatState.reserved;
+    }
+  }
+
+  bool _isSeatSelectable(String seatNumber) {
+    final seat = _seats.firstWhere(
+      (s) => s.seatNumber == seatNumber,
+      orElse: () => _seats.first,
+    );
+    return seat.status == SeatStatus.available;
   }
 
   @override
@@ -242,6 +303,34 @@ class _SeatBookingFlowState extends State<SeatBookingFlow> {
   };
 
   Widget _buildMap() {
+    if (_isLoadingSeats) {
+      return const Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            CircularProgressIndicator(),
+            SizedBox(height: 16),
+            Text('Loading seats...'),
+          ],
+        ),
+      );
+    }
+
+    if (_mapSeats.isEmpty) {
+      return const Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(Icons.event_seat_outlined, size: 48, color: _muted),
+            SizedBox(height: 16),
+            Text('No seats available'),
+            SizedBox(height: 8),
+            Text('Please contact library staff', style: TextStyle(fontSize: 12, color: _muted)),
+          ],
+        ),
+      );
+    }
+
     final availableSeats = _seatStates.values
         .where((state) => state == _SeatState.available)
         .length;
@@ -282,7 +371,7 @@ class _SeatBookingFlowState extends State<SeatBookingFlow> {
               GridView.builder(
                 shrinkWrap: true,
                 physics: const NeverScrollableScrollPhysics(),
-                itemCount: 16,
+                itemCount: _mapSeats.length * 4,
                 gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
                   crossAxisCount: 4,
                   crossAxisSpacing: 12,
@@ -290,7 +379,12 @@ class _SeatBookingFlowState extends State<SeatBookingFlow> {
                   childAspectRatio: 0.92,
                 ),
                 itemBuilder: (context, index) {
-                  final seat = _mapSeats[index ~/ 4][index % 4];
+                  final rowIndex = index ~/ 4;
+                  final colIndex = index % 4;
+                  if (rowIndex >= _mapSeats.length || colIndex >= _mapSeats[rowIndex].length) {
+                    return const SizedBox.shrink();
+                  }
+                  final seat = _mapSeats[rowIndex][colIndex];
                   final state = _seatStates[seat] ?? _SeatState.available;
                   return _SeatTile(
                     label: seat,
@@ -506,15 +600,8 @@ class _SeatBookingFlowState extends State<SeatBookingFlow> {
         ),
         const SizedBox(height: 20),
         _PrimaryBookingButton(
-          label: 'Confirm Booking',
-          onPressed: () {
-            setState(() {
-              if (_selectedSeat != null) {
-                _seatStates[_selectedSeat!] = _SeatState.reserved;
-              }
-            });
-            _goTo(_BookingStage.checkIn);
-          },
+          label: _isSaving ? 'Saving...' : 'Confirm Booking',
+          onPressed: _isSaving ? null : _confirmBooking,
         ),
         const SizedBox(height: 14),
         TextButton(
@@ -687,6 +774,57 @@ class _SeatBookingFlowState extends State<SeatBookingFlow> {
       first.year == second.year &&
       first.month == second.month &&
       first.day == second.day;
+
+  Future<void> _confirmBooking() async {
+    final userId = FirebaseAuth.instance.currentUser?.uid;
+    if (userId == null || _selectedSeat == null || _bookingStart == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Please log in and select a seat')),
+      );
+      return;
+    }
+
+    setState(() => _isSaving = true);
+
+    try {
+      final booking = Booking(
+        id: DateTime.now().millisecondsSinceEpoch.toString(),
+        userId: userId,
+        userName: 'Student', // TODO: Get from user profile
+        seatId: _selectedSeat!,
+        resourceId: 'central-library',
+        date: _selectedDate,
+        startTime: _bookingStart!,
+        endTime: DateTime(
+          _selectedDate.year,
+          _selectedDate.month,
+          _selectedDate.day,
+          _orderedSelectedSlots.last.endHour,
+        ),
+        status: BookingStatus.confirmed,
+        createdAt: DateTime.now(),
+      );
+
+      await _firestoreService.createBooking(booking);
+
+      if (mounted) {
+        setState(() {
+          if (_selectedSeat != null) {
+            _seatStates[_selectedSeat!] = _SeatState.reserved;
+          }
+          _isSaving = false;
+        });
+        _goTo(_BookingStage.checkIn);
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() => _isSaving = false);
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Failed to create booking: $e')),
+        );
+      }
+    }
+  }
 }
 
 class _BookingHeader extends StatelessWidget {

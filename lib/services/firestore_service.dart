@@ -1,9 +1,11 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import '../models/book.dart';
+import '../models/booking.dart';
 import '../models/fine_appeal.dart';
 import '../models/hold.dart';
 import '../models/notice.dart';
 import '../models/payment_transaction.dart';
+import '../models/seat.dart';
 
 class FirestoreService {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
@@ -13,6 +15,12 @@ class FirestoreService {
 
   // Holds collection
   CollectionReference get _holdsCollection => _firestore.collection('holds');
+
+  // Bookings collection
+  CollectionReference get _bookingsCollection => _firestore.collection('bookings');
+
+  // Seats collection
+  CollectionReference get _seatsCollection => _firestore.collection('seats');
 
   // Notices collection
   CollectionReference get _noticesCollection => _firestore.collection('notices');
@@ -108,12 +116,13 @@ class FirestoreService {
   Stream<List<Hold>> getUserHoldsStream(String userId) {
     return _holdsCollection
         .where('userId', isEqualTo: userId)
-        .orderBy('createdAt', descending: true)
         .snapshots()
         .map((snapshot) {
-      return snapshot.docs.map((doc) {
+      final holds = snapshot.docs.map((doc) {
         return Hold.fromJson(doc.data() as Map<String, dynamic>);
       }).toList();
+      holds.sort((a, b) => b.createdAt.compareTo(a.createdAt));
+      return holds;
     });
   }
 
@@ -172,6 +181,328 @@ class FirestoreService {
       return snapshot.docs.isNotEmpty;
     } catch (e) {
       throw Exception('Failed to check hold: $e');
+    }
+  }
+
+  // ==================== BOOKINGS ====================
+
+  // Get all bookings stream (no user filter - for admin)
+  Stream<List<Booking>> getAllBookingsStream() {
+    return _bookingsCollection
+        .snapshots()
+        .map((snapshot) {
+      final bookings = snapshot.docs.map((doc) {
+        return Booking.fromJson(doc.data() as Map<String, dynamic>);
+      }).toList();
+      bookings.sort((a, b) => b.startTime.compareTo(a.startTime));
+      return bookings;
+    });
+  }
+
+  // Get user's bookings stream
+  Stream<List<Booking>> getUserBookingsStream(String userId) {
+    return _bookingsCollection
+        .where('userId', isEqualTo: userId)
+        .snapshots()
+        .map((snapshot) {
+      final bookings = snapshot.docs.map((doc) {
+        return Booking.fromJson(doc.data() as Map<String, dynamic>);
+      }).toList();
+      bookings.sort((a, b) => b.startTime.compareTo(a.startTime));
+      return bookings;
+    });
+  }
+
+  // Get user's bookings (one-time)
+  Future<List<Booking>> getUserBookings(String userId) async {
+    try {
+      final snapshot = await _bookingsCollection
+          .where('userId', isEqualTo: userId)
+          .get();
+      final bookings = snapshot.docs.map((doc) {
+        return Booking.fromJson(doc.data() as Map<String, dynamic>);
+      }).toList();
+      bookings.sort((a, b) => b.startTime.compareTo(a.startTime));
+      return bookings;
+    } catch (e) {
+      throw Exception('Failed to get bookings: $e');
+    }
+  }
+
+  // Get booking by ID
+  Future<Booking?> getBookingById(String bookingId) async {
+    try {
+      final doc = await _bookingsCollection.doc(bookingId).get();
+      if (doc.exists) {
+        return Booking.fromJson(doc.data() as Map<String, dynamic>);
+      }
+      return null;
+    } catch (e) {
+      throw Exception('Failed to get booking: $e');
+    }
+  }
+
+  // Create booking
+  Future<void> createBooking(Booking booking) async {
+    try {
+      await _bookingsCollection.doc(booking.id).set(booking.toJson());
+    } catch (e) {
+      throw Exception('Failed to create booking: $e');
+    }
+  }
+
+  // Update booking
+  Future<void> updateBooking(String bookingId, Map<String, dynamic> data) async {
+    try {
+      await _bookingsCollection.doc(bookingId).update(data);
+    } catch (e) {
+      throw Exception('Failed to update booking: $e');
+    }
+  }
+
+  // Cancel booking
+  Future<void> cancelBooking(String bookingId) async {
+    try {
+      await _bookingsCollection.doc(bookingId).update({
+        'status': 'cancelled',
+        'cancelledAt': DateTime.now().toIso8601String(),
+      });
+    } catch (e) {
+      throw Exception('Failed to cancel booking: $e');
+    }
+  }
+
+  // Extend booking time
+  Future<void> extendBooking(String bookingId, DateTime newEndTime) async {
+    try {
+      await _bookingsCollection.doc(bookingId).update({
+        'endTime': newEndTime.toIso8601String(),
+      });
+    } catch (e) {
+      throw Exception('Failed to extend booking: $e');
+    }
+  }
+
+  // ==================== SEATS ====================
+
+  // Get all seats stream
+  Stream<List<Seat>> getSeatsStream() {
+    return _seatsCollection
+        .snapshots()
+        .map((snapshot) {
+      final seats = snapshot.docs.map((doc) {
+        return Seat.fromJson(doc.data() as Map<String, dynamic>);
+      }).toList();
+      seats.sort((a, b) => a.seatNumber.compareTo(b.seatNumber));
+      return seats;
+    });
+  }
+
+  // Get all seats (one-time)
+  Future<List<Seat>> getSeats() async {
+    try {
+      final snapshot = await _seatsCollection.get();
+      final seats = snapshot.docs.map((doc) {
+        return Seat.fromJson(doc.data() as Map<String, dynamic>);
+      }).toList();
+      seats.sort((a, b) => a.seatNumber.compareTo(b.seatNumber));
+      return seats;
+    } catch (e) {
+      throw Exception('Failed to get seats: $e');
+    }
+  }
+
+  // Get seat by ID
+  Future<Seat?> getSeatById(String seatId) async {
+    try {
+      final doc = await _seatsCollection.doc(seatId).get();
+      if (doc.exists) {
+        return Seat.fromJson(doc.data() as Map<String, dynamic>);
+      }
+      return null;
+    } catch (e) {
+      throw Exception('Failed to get seat: $e');
+    }
+  }
+
+  // Create seat
+  Future<void> createSeat(Seat seat) async {
+    try {
+      await _seatsCollection.doc(seat.id).set(seat.toJson());
+    } catch (e) {
+      throw Exception('Failed to create seat: $e');
+    }
+  }
+
+  // Update seat
+  Future<void> updateSeat(String seatId, Map<String, dynamic> data) async {
+    try {
+      await _seatsCollection.doc(seatId).update(data);
+    } catch (e) {
+      throw Exception('Failed to update seat: $e');
+    }
+  }
+
+  // Delete seat
+  Future<void> deleteSeat(String seatId) async {
+    try {
+      await _seatsCollection.doc(seatId).delete();
+    } catch (e) {
+      throw Exception('Failed to delete seat: $e');
+    }
+  }
+
+  // Update seat status
+  Future<void> updateSeatStatus(String seatId, SeatStatus status) async {
+    try {
+      await _seatsCollection.doc(seatId).update({
+        'status': status.value,
+        'updatedAt': DateTime.now().toIso8601String(),
+      });
+    } catch (e) {
+      throw Exception('Failed to update seat status: $e');
+    }
+  }
+
+  // Initialize default seats (for first-time setup)
+  Future<void> initializeDefaultSeats() async {
+    try {
+      final existingSeats = await getSeats();
+      if (existingSeats.isNotEmpty) {
+        return; // Seats already exist
+      }
+
+      final defaultSeats = [
+        // Row A
+        Seat(
+          id: 'A-01',
+          seatNumber: 'A-01',
+          row: 'A',
+          position: 1,
+          status: SeatStatus.available,
+          hasPowerOutlet: true,
+          isNearWindow: false,
+          createdAt: DateTime.now(),
+        ),
+        Seat(
+          id: 'A-02',
+          seatNumber: 'A-02',
+          row: 'A',
+          position: 2,
+          status: SeatStatus.available,
+          hasPowerOutlet: true,
+          isNearWindow: false,
+          createdAt: DateTime.now(),
+        ),
+        Seat(
+          id: 'A-03',
+          seatNumber: 'A-03',
+          row: 'A',
+          position: 3,
+          status: SeatStatus.available,
+          hasPowerOutlet: false,
+          isNearWindow: false,
+          createdAt: DateTime.now(),
+        ),
+        Seat(
+          id: 'A-04',
+          seatNumber: 'A-04',
+          row: 'A',
+          position: 4,
+          status: SeatStatus.available,
+          hasPowerOutlet: true,
+          isNearWindow: true,
+          createdAt: DateTime.now(),
+        ),
+        // Row B
+        Seat(
+          id: 'B-05',
+          seatNumber: 'B-05',
+          row: 'B',
+          position: 5,
+          status: SeatStatus.available,
+          hasPowerOutlet: true,
+          isNearWindow: false,
+          createdAt: DateTime.now(),
+        ),
+        Seat(
+          id: 'B-06',
+          seatNumber: 'B-06',
+          row: 'B',
+          position: 6,
+          status: SeatStatus.available,
+          hasPowerOutlet: true,
+          isNearWindow: false,
+          createdAt: DateTime.now(),
+        ),
+        Seat(
+          id: 'B-07',
+          seatNumber: 'B-07',
+          row: 'B',
+          position: 7,
+          status: SeatStatus.available,
+          hasPowerOutlet: false,
+          isNearWindow: false,
+          createdAt: DateTime.now(),
+        ),
+        Seat(
+          id: 'B-08',
+          seatNumber: 'B-08',
+          row: 'B',
+          position: 8,
+          status: SeatStatus.available,
+          hasPowerOutlet: true,
+          isNearWindow: true,
+          createdAt: DateTime.now(),
+        ),
+        // Row C
+        Seat(
+          id: 'C-09',
+          seatNumber: 'C-09',
+          row: 'C',
+          position: 9,
+          status: SeatStatus.available,
+          hasPowerOutlet: true,
+          isNearWindow: false,
+          createdAt: DateTime.now(),
+        ),
+        Seat(
+          id: 'C-10',
+          seatNumber: 'C-10',
+          row: 'C',
+          position: 10,
+          status: SeatStatus.available,
+          hasPowerOutlet: true,
+          isNearWindow: false,
+          createdAt: DateTime.now(),
+        ),
+        Seat(
+          id: 'C-11',
+          seatNumber: 'C-11',
+          row: 'C',
+          position: 11,
+          status: SeatStatus.available,
+          hasPowerOutlet: false,
+          isNearWindow: false,
+          createdAt: DateTime.now(),
+        ),
+        Seat(
+          id: 'C-12',
+          seatNumber: 'C-12',
+          row: 'C',
+          position: 12,
+          status: SeatStatus.available,
+          hasPowerOutlet: true,
+          isNearWindow: true,
+          createdAt: DateTime.now(),
+        ),
+      ];
+
+      for (final seat in defaultSeats) {
+        await createSeat(seat);
+      }
+    } catch (e) {
+      throw Exception('Failed to initialize default seats: $e');
     }
   }
 
