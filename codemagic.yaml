@@ -1,0 +1,28 @@
+
+workflows:
+  readspace-ios:
+    name: ReadSpace iOS Build
+    max_build_duration: 60
+    instance_type: mac_mini_m2
+
+    environment:
+      flutter: stable
+      xcode: latest
+      cocoapods: default
+
+    scripts:
+      - name: Install Flutter dependencies
+        script: flutter pub get
+
+      - name: Install iOS dependencies
+        script: |
+          cd ios
+          pod install
+          cd ..
+
+      - name: Build iOS without signing
+        script: flutter build ios --release --no-codesign
+
+    artifacts:
+      - build/ios/iphoneos/**/*.app
+      - /tmp/xcodebuild_logs/*.log
