@@ -47,6 +47,20 @@ class _CatalogueScreenState extends State<CatalogueScreen> {
     }
   }
 
+  bool _initializedArgs = false;
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (!_initializedArgs) {
+      _initializedArgs = true;
+      final args = ModalRoute.of(context)?.settings.arguments;
+      if (args is String && args.isNotEmpty && _searchCtrl.text.isEmpty) {
+        _searchCtrl.text = args;
+      }
+    }
+  }
+
   @override
   void dispose() {
     _searchCtrl.dispose();

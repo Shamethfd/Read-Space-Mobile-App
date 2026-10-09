@@ -120,31 +120,28 @@ class _HoldsScreenState extends State<HoldsScreen> {
             );
           }
 
-          return FutureBuilder<List<Book>>(
-            future: _loadBooksForHolds(holds),
+          return FutureBuilder<Map<String, Book>>(
+            future: _loadBooksMapForHolds(holds),
             builder: (context, booksSnapshot) {
-              if (booksSnapshot.connectionState == ConnectionState.waiting) {
+              if (booksSnapshot.connectionState == ConnectionState.waiting &&
+                  _bookCache.isEmpty) {
                 return const Center(child: CircularProgressIndicator());
               }
 
-              if (booksSnapshot.hasError) {
-                return Center(
-                  child: Text('Error loading books'),
-                );
-              }
-
-              final books = booksSnapshot.data ?? [];
+              final booksMap = booksSnapshot.data ?? _bookCache;
 
               return ListView.builder(
                 padding: const EdgeInsets.all(16),
                 itemCount: holds.length,
                 itemBuilder: (context, index) {
                   final hold = holds[index];
-                  final book = books.firstWhere(
-                    (b) => b.id == hold.bookId,
-                    orElse: () => _createPlaceholderBook(),
+                  final book = booksMap[hold.bookId] ??
+                      _createPlaceholderBook(hold.bookId);
+                  return _HoldCard(
+                    hold: hold,
+                    book: book,
+                    onCancelled: () => setState(() {}),
                   );
-                  return _HoldCard(hold: hold, book: book);
                 },
               );
             },
@@ -154,27 +151,30 @@ class _HoldsScreenState extends State<HoldsScreen> {
     );
   }
 
-  Future<List<Book>> _loadBooksForHolds(List<Hold> holds) async {
+  final Map<String, Book> _bookCache = {};
+
+  Future<Map<String, Book>> _loadBooksMapForHolds(List<Hold> holds) async {
     final bookIds = holds.map((h) => h.bookId).toSet().toList();
-    final books = <Book>[];
-    
     for (final bookId in bookIds) {
-      final book = await _firestoreService.getBookById(bookId);
-      if (book != null) {
-        books.add(book);
+      if (!_bookCache.containsKey(bookId) && bookId.isNotEmpty) {
+        try {
+          final book = await _firestoreService.getBookById(bookId);
+          if (book != null) {
+            _bookCache[bookId] = book;
+          }
+        } catch (_) {}
       }
     }
-    
-    return books;
+    return _bookCache;
   }
 
-  Book _createPlaceholderBook() {
+  Book _createPlaceholderBook(String bookId) {
     return Book(
-      id: '',
-      title: 'Unknown Book',
-      author: 'Unknown Author',
+      id: bookId,
+      title: 'Book #$bookId',
+      author: 'Library Book',
       isbn: '',
-      genre: 'Unknown',
+      genre: 'General',
       description: '',
       pages: 0,
       language: 'English',
@@ -189,13 +189,84 @@ class _HoldsScreenState extends State<HoldsScreen> {
   }
 }
 
-class _HoldCard extends StatelessWidget {
-  const _HoldCard({required this.hold, required this.book});
+class _HoldCard extends StatefulWidget {
+  const _HoldCard({
+    required this.hold,
+    required this.book,
+    this.onCancelled,
+  });
+
   final Hold hold;
   final Book book;
+  final VoidCallback? onCancelled;
+
+  @override
+  State<_HoldCard> createState() => _HoldCardState();
+}
+
+class _HoldCardState extends State<_HoldCard> {
+  bool _cancelling = false;
+  final FirestoreService _firestoreService = FirestoreService();
+
+  Future<void> _confirmCancel(BuildContext context) async {
+    final messenger = ScaffoldMessenger.of(context);
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: const Text('Cancel Hold'),
+        content: Text(
+          'Are you sure you want to cancel your hold for "${widget.book.title}"?',
+          style: GoogleFonts.inter(fontSize: 14),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Keep Hold'),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: AppTheme.red,
+              foregroundColor: Colors.white,
+            ),
+            child: const Text('Cancel Hold'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed != true || !mounted) return;
+
+    setState(() => _cancelling = true);
+    try {
+      await _firestoreService.cancelHold(widget.hold.id);
+      if (!mounted) return;
+      messenger.showSnackBar(
+        const SnackBar(
+          content: Text('Hold cancelled successfully.'),
+          backgroundColor: AppTheme.success,
+        ),
+      );
+      widget.onCancelled?.call();
+    } catch (e) {
+      if (!mounted) return;
+      messenger.showSnackBar(
+        SnackBar(
+          content: Text('Failed to cancel hold: $e'),
+          backgroundColor: AppTheme.red,
+        ),
+      );
+    } finally {
+      if (mounted) setState(() => _cancelling = false);
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
+    final hold = widget.hold;
+    final book = widget.book;
+
     final Color statusColor;
     switch (hold.holdStatus) {
       case HoldStatus.pending:
@@ -228,76 +299,123 @@ class _HoldCard extends StatelessWidget {
         break;
     }
 
+    final canCancel =
+        hold.holdStatus == HoldStatus.pending || hold.holdStatus == HoldStatus.ready;
+
     return Card(
       margin: const EdgeInsets.only(bottom: 12),
-      child: Padding(
-        padding: const EdgeInsets.all(14),
-        child: Row(
-          children: [
-            Container(
-              width: 52,
-              height: 68,
-              decoration: BoxDecoration(
-                color: book.coverColor,
-                borderRadius: BorderRadius.circular(8),
-              ),
-              child: const Icon(Icons.menu_book_rounded,
-                  color: Colors.white38, size: 24),
-            ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Column(
+      child: InkWell(
+        onTap: book.id.isNotEmpty
+            ? () => Navigator.pushNamed(
+                  context,
+                  AppRoutes.bookDetail,
+                  arguments: book.id,
+                )
+            : null,
+        borderRadius: BorderRadius.circular(12),
+        child: Padding(
+          padding: const EdgeInsets.all(14),
+          child: Column(
+            children: [
+              Row(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(
-                    book.title,
-                    style: GoogleFonts.inter(
-                      fontSize: 14,
-                      fontWeight: FontWeight.w700,
-                      color: AppTheme.textPrimary,
+                  Container(
+                    width: 52,
+                    height: 68,
+                    decoration: BoxDecoration(
+                      color: book.coverColor,
+                      borderRadius: BorderRadius.circular(8),
                     ),
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
+                    child: const Icon(Icons.menu_book_rounded,
+                        color: Colors.white38, size: 24),
                   ),
-                  const SizedBox(height: 4),
-                  Text(
-                    'by ${book.author}',
-                    style: GoogleFonts.inter(
-                        fontSize: 12, color: AppTheme.secondaryText),
-                  ),
-                  const SizedBox(height: 8),
-                  Row(
-                    children: [
-                      Container(
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: 8, vertical: 3),
-                        decoration: BoxDecoration(
-                          color: statusColor.withValues(alpha: 0.1),
-                          borderRadius: BorderRadius.circular(4),
-                        ),
-                        child: Text(
-                          statusLabel,
-                          style: GoogleFonts.inter(
-                            fontSize: 10,
-                            fontWeight: FontWeight.w700,
-                            color: statusColor,
-                            letterSpacing: 0.3,
-                          ),
-                        ),
-                      ),
-                      const SizedBox(width: 8),
-                      if (hold.holdStatus == HoldStatus.pending)
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
                         Text(
-                          'Position #${hold.queuePosition}',
+                          book.title,
                           style: GoogleFonts.inter(
-                              fontSize: 11, color: AppTheme.secondaryText),
+                            fontSize: 14,
+                            fontWeight: FontWeight.w700,
+                            color: AppTheme.textPrimary,
+                          ),
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
                         ),
-                    ],
+                        const SizedBox(height: 4),
+                        Text(
+                          'by ${book.author}',
+                          style: GoogleFonts.inter(
+                              fontSize: 12, color: AppTheme.secondaryText),
+                        ),
+                        const SizedBox(height: 8),
+                        Row(
+                          children: [
+                            Container(
+                              padding: const EdgeInsets.symmetric(
+                                  horizontal: 8, vertical: 3),
+                              decoration: BoxDecoration(
+                                color: statusColor.withValues(alpha: 0.1),
+                                borderRadius: BorderRadius.circular(4),
+                              ),
+                              child: Text(
+                                statusLabel,
+                                style: GoogleFonts.inter(
+                                  fontSize: 10,
+                                  fontWeight: FontWeight.w700,
+                                  color: statusColor,
+                                  letterSpacing: 0.3,
+                                ),
+                              ),
+                            ),
+                            const SizedBox(width: 8),
+                            if (hold.holdStatus == HoldStatus.pending)
+                              Text(
+                                'Position #${hold.queuePosition}',
+                                style: GoogleFonts.inter(
+                                    fontSize: 11,
+                                    color: AppTheme.secondaryText,
+                                    fontWeight: FontWeight.w600),
+                              ),
+                          ],
+                        ),
+                      ],
+                    ),
                   ),
                 ],
               ),
-            ),
-          ],
+              if (canCancel) ...[
+                const SizedBox(height: 10),
+                const Divider(height: 1),
+                const SizedBox(height: 6),
+                Align(
+                  alignment: Alignment.centerRight,
+                  child: TextButton.icon(
+                    onPressed: _cancelling ? null : () => _confirmCancel(context),
+                    icon: _cancelling
+                        ? const SizedBox(
+                            width: 14,
+                            height: 14,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          )
+                        : const Icon(Icons.close_rounded,
+                            size: 16, color: AppTheme.red),
+                    label: Text(
+                      'Cancel Hold',
+                      style: GoogleFonts.inter(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w600,
+                        color: AppTheme.red,
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ],
+          ),
         ),
       ),
     );

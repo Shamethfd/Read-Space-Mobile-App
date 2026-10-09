@@ -42,7 +42,7 @@ class _HoldRequestScreenState extends State<HoldRequestScreen> {
       BuildContext context, Book book) async {
     final messenger = ScaffoldMessenger.of(context);
     final userId = FirebaseAuth.instance.currentUser?.uid;
-    
+
     if (userId == null) {
       messenger.showSnackBar(
         const SnackBar(
@@ -55,27 +55,32 @@ class _HoldRequestScreenState extends State<HoldRequestScreen> {
 
     setState(() => _placing = true);
     try {
-      final hold = Hold(
-        id: DateTime.now().millisecondsSinceEpoch.toString(),
+      final hold = await _firestoreService.joinHoldQueue(
         userId: userId,
         bookId: book.id,
-        createdAt: DateTime.now(),
-        holdStatus: HoldStatus.pending,
-        queuePosition: book.holdCount + 1,
       );
-      
-      await _firestoreService.createHold(hold);
-      
+
       if (!mounted) return;
       messenger.showSnackBar(
         SnackBar(
-          content: Text('You joined the queue for "${book.title}"'),
+          content: Text(
+              'You joined the queue for "${book.title}" (Position #${hold.queuePosition})'),
           backgroundColor: AppTheme.success,
           duration: const Duration(seconds: 3),
         ),
       );
-      Navigator.pop(context);
+      Navigator.pop(context, true);
+    } on DuplicateHoldException catch (e) {
+      if (!mounted) return;
+      messenger.showSnackBar(
+        SnackBar(
+          content: Text(e.message),
+          backgroundColor: AppTheme.orange,
+          duration: const Duration(seconds: 3),
+        ),
+      );
     } catch (e) {
+      if (!mounted) return;
       messenger.showSnackBar(
         SnackBar(
           content: Text('Failed to join queue: $e'),
@@ -343,24 +348,26 @@ class _HoldRequestScreenState extends State<HoldRequestScreen> {
             ),
             const SizedBox(height: 24),
 
-            // ── Demo / Live notice ──────────────────────────────────────
+            // ── Live notice ──────────────────────────────────────────
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
               decoration: BoxDecoration(
-                color: const Color(0xFFF3F0FF),
+                color: const Color(0xFFF0FDF4),
                 borderRadius: BorderRadius.circular(8),
-                border: Border.all(color: const Color(0xFFB39DDB)),
+                border: Border.all(color: const Color(0xFFBBF7D0)),
               ),
               child: Row(
                 children: [
-                  const Icon(Icons.info_outline_rounded,
-                      size: 14, color: Color(0xFF5E35B1)),
-                  const SizedBox(width: 6),
+                  const Icon(Icons.check_circle_outline_rounded,
+                      size: 14, color: AppTheme.success),
+                  const SizedBox(width: 8),
                   Expanded(
                     child: Text(
-                      'DEMO — This queue join is simulated. No real hold is placed.',
+                      'Your hold request will be queued in real-time. You will be notified when ready for pickup.',
                       style: GoogleFonts.inter(
-                          fontSize: 11, color: const Color(0xFF4527A0)),
+                          fontSize: 11,
+                          color: const Color(0xFF166534),
+                          fontWeight: FontWeight.w500),
                     ),
                   ),
                 ],

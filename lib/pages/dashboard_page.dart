@@ -116,7 +116,11 @@ class _DashboardPageState extends State<DashboardPage> {
               else
                 const Center(child: Text('Log in to view reservations')),
               const SizedBox(height: 28),
-              const _SectionHeader(title: 'Trending Books', action: 'View All'),
+              _SectionHeader(
+                title: 'Trending Books',
+                action: 'View All',
+                onAction: () => Navigator.pushNamed(context, AppRoutes.catalogue),
+              ),
               const SizedBox(height: 12),
               _TrendingBooks(firestoreService: _firestoreService),
             ],
@@ -348,10 +352,17 @@ class _SearchBar extends StatelessWidget {
 
   final TextEditingController controller;
 
+  void _submitSearch(BuildContext context, String query) {
+    final q = query.trim();
+    Navigator.pushNamed(context, AppRoutes.catalogue, arguments: q);
+  }
+
   @override
   Widget build(BuildContext context) {
     return TextField(
       controller: controller,
+      textInputAction: TextInputAction.search,
+      onSubmitted: (query) => _submitSearch(context, query),
       style: GoogleFonts.poppins(fontSize: 12.5, color: _DashboardColors.text),
       decoration: InputDecoration(
         hintText: 'Search books, authors, seats...',
@@ -359,13 +370,16 @@ class _SearchBar extends StatelessWidget {
           fontSize: 12.5,
           color: _DashboardColors.muted,
         ),
-        prefixIcon: const Icon(
-          Icons.search_rounded,
-          color: _DashboardColors.muted,
-          size: 21,
+        prefixIcon: IconButton(
+          icon: const Icon(
+            Icons.search_rounded,
+            color: _DashboardColors.muted,
+            size: 21,
+          ),
+          onPressed: () => _submitSearch(context, controller.text),
         ),
         suffixIcon: IconButton(
-          onPressed: () {},
+          onPressed: () => Navigator.pushNamed(context, AppRoutes.catalogue),
           tooltip: 'Filter search',
           icon: const Icon(
             Icons.tune_rounded,
@@ -613,6 +627,7 @@ class _TrendingBookCard extends StatelessWidget {
     required this.statusColor,
     required this.coverColor,
     required this.coverIcon,
+    this.onTap,
   });
 
   final String title;
@@ -621,16 +636,20 @@ class _TrendingBookCard extends StatelessWidget {
   final Color statusColor;
   final Color coverColor;
   final IconData coverIcon;
+  final VoidCallback? onTap;
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(11),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: _DashboardColors.border),
-      ),
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(16),
+      child: Container(
+        padding: const EdgeInsets.all(11),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: _DashboardColors.border),
+        ),
       child: Row(
         children: [
           Container(
@@ -682,8 +701,9 @@ class _TrendingBookCard extends StatelessWidget {
           ),
         ],
       ),
-    );
-  }
+    ),
+  );
+}
 }
 
 class _StatusPill extends StatelessWidget {
@@ -824,6 +844,11 @@ class _TrendingBooks extends StatelessWidget {
                     : _DashboardColors.red,
                 coverColor: book.coverColor,
                 coverIcon: Icons.menu_book,
+                onTap: () => Navigator.pushNamed(
+                  context,
+                  AppRoutes.bookDetail,
+                  arguments: book.id,
+                ),
               ),
             );
           }).toList(),

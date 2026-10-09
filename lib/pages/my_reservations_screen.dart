@@ -476,6 +476,69 @@ class _BookHoldCardState extends State<_BookHoldCard> {
     }
   }
 
+  bool _cancelling = false;
+
+  @override
+  void didUpdateWidget(covariant _BookHoldCard oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.hold.bookId != widget.hold.bookId) {
+      _loadBook();
+    }
+  }
+
+  Future<void> _confirmCancel(BuildContext context) async {
+    final messenger = ScaffoldMessenger.of(context);
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: const Text('Cancel Hold'),
+        content: Text(
+          'Are you sure you want to cancel your hold for "${_book?.title ?? 'this book'}"?',
+          style: GoogleFonts.inter(fontSize: 14),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Keep Hold'),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: AppTheme.red,
+              foregroundColor: Colors.white,
+            ),
+            child: const Text('Cancel Hold'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed != true || !mounted) return;
+
+    setState(() => _cancelling = true);
+    try {
+      await _firestoreService.cancelHold(widget.hold.id);
+      if (!mounted) return;
+      messenger.showSnackBar(
+        const SnackBar(
+          content: Text('Hold cancelled successfully.'),
+          backgroundColor: AppTheme.success,
+        ),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      messenger.showSnackBar(
+        SnackBar(
+          content: Text('Failed to cancel hold: $e'),
+          backgroundColor: AppTheme.red,
+        ),
+      );
+    } finally {
+      if (mounted) setState(() => _cancelling = false);
+    }
+  }
+
   String get _statusLabel {
     switch (widget.hold.holdStatus) {
       case HoldStatus.pending:
@@ -508,9 +571,12 @@ class _BookHoldCardState extends State<_BookHoldCard> {
 
   @override
   Widget build(BuildContext context) {
+    final canCancel = widget.hold.holdStatus == HoldStatus.pending ||
+        widget.hold.holdStatus == HoldStatus.ready;
+
     return InkWell(
       onTap: () {
-        if (_book != null) {
+        if (_book != null && _book!.id.isNotEmpty) {
           Navigator.pushNamed(
             context,
             AppRoutes.bookDetail,
@@ -526,79 +592,135 @@ class _BookHoldCardState extends State<_BookHoldCard> {
           borderRadius: BorderRadius.circular(12),
           border: Border.all(color: const Color(0xFFE5E7EB)),
         ),
-        child: Row(
+        child: Column(
           children: [
-            Container(
-              width: 48,
-              height: 64,
-              decoration: BoxDecoration(
-                color: _book?.coverColor ?? const Color(0xFFE7F2FF),
-                borderRadius: BorderRadius.circular(8),
-              ),
-              child: const Icon(
-                Icons.menu_book_rounded,
-                color: Color(0xFF087BFA),
-                size: 24,
-              ),
-            ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    _book?.title ?? 'Loading...',
-                    style: GoogleFonts.inter(
-                      fontSize: 14,
-                      fontWeight: FontWeight.w700,
-                      color: const Color(0xFF20242A),
-                    ),
-                  ),
-                  const SizedBox(height: 2),
-                  Text(
-                    _book?.author ?? '',
-                    style: GoogleFonts.inter(
-                      fontSize: 12,
-                      color: const Color(0xFF8A929D),
-                    ),
-                  ),
-                  const SizedBox(height: 6),
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                    decoration: BoxDecoration(
-                      color: _statusColor.withValues(alpha: 0.1),
-                      borderRadius: BorderRadius.circular(4),
-                    ),
-                    child: Text(
-                      _statusLabel,
-                      style: GoogleFonts.inter(
-                        fontSize: 10,
-                        fontWeight: FontWeight.w600,
-                        color: _statusColor,
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            const SizedBox(width: 8),
-            Column(
-              crossAxisAlignment: CrossAxisAlignment.end,
+            Row(
               children: [
-                Text(
-                  _formatDate(widget.hold.createdAt),
-                  style: GoogleFonts.inter(
-                    fontSize: 11,
-                    color: const Color(0xFF8A929D),
+                Container(
+                  width: 48,
+                  height: 64,
+                  decoration: BoxDecoration(
+                    color: _book?.coverColor ?? const Color(0xFFE7F2FF),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: const Icon(
+                    Icons.menu_book_rounded,
+                    color: Color(0xFF087BFA),
+                    size: 24,
                   ),
                 ),
-                const SizedBox(height: 4),
-                const Icon(
-                  Icons.chevron_right_rounded,
-                  color: Color(0xFF8A929D),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        _book?.title ?? 'Loading...',
+                        style: GoogleFonts.inter(
+                          fontSize: 14,
+                          fontWeight: FontWeight.w700,
+                          color: const Color(0xFF20242A),
+                        ),
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        _book?.author ?? '',
+                        style: GoogleFonts.inter(
+                          fontSize: 12,
+                          color: const Color(0xFF8A929D),
+                        ),
+                      ),
+                      const SizedBox(height: 6),
+                      Wrap(
+                        crossAxisAlignment: WrapCrossAlignment.center,
+                        spacing: 8,
+                        children: [
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 8, vertical: 3),
+                            decoration: BoxDecoration(
+                              color: _statusColor.withValues(alpha: 0.1),
+                              borderRadius: BorderRadius.circular(4),
+                            ),
+                            child: Text(
+                              _statusLabel,
+                              style: GoogleFonts.inter(
+                                fontSize: 10,
+                                fontWeight: FontWeight.w600,
+                                color: _statusColor,
+                              ),
+                            ),
+                          ),
+                          if (widget.hold.holdStatus == HoldStatus.pending)
+                            Text(
+                              'Position #${widget.hold.queuePosition}',
+                              style: GoogleFonts.inter(
+                                fontSize: 11,
+                                fontWeight: FontWeight.w600,
+                                color: const Color(0xFFF59E0B),
+                              ),
+                            ),
+                          if (widget.hold.holdStatus == HoldStatus.ready)
+                            Text(
+                              'Circulation Desk',
+                              style: GoogleFonts.inter(
+                                fontSize: 11,
+                                fontWeight: FontWeight.w600,
+                                color: const Color(0xFF16A34A),
+                              ),
+                            ),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.end,
+                  children: [
+                    Text(
+                      _formatDate(widget.hold.createdAt),
+                      style: GoogleFonts.inter(
+                        fontSize: 11,
+                        color: const Color(0xFF8A929D),
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    const Icon(
+                      Icons.chevron_right_rounded,
+                      color: Color(0xFF8A929D),
+                    ),
+                  ],
                 ),
               ],
             ),
+            if (canCancel) ...[
+              const SizedBox(height: 10),
+              const Divider(height: 1),
+              const SizedBox(height: 6),
+              Align(
+                alignment: Alignment.centerRight,
+                child: TextButton.icon(
+                  onPressed: _cancelling ? null : () => _confirmCancel(context),
+                  icon: _cancelling
+                      ? const SizedBox(
+                          width: 14,
+                          height: 14,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        )
+                      : const Icon(Icons.close_rounded,
+                          size: 16, color: AppTheme.red),
+                  label: Text(
+                    'Cancel Hold',
+                    style: GoogleFonts.inter(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w600,
+                      color: AppTheme.red,
+                    ),
+                  ),
+                ),
+              ),
+            ],
           ],
         ),
       ),

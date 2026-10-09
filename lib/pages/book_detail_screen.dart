@@ -1,7 +1,10 @@
+import 'dart:async';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:read_space/main.dart';
 import 'package:read_space/models/book.dart';
+import 'package:read_space/models/hold.dart';
 import 'package:read_space/services/firestore_service.dart';
 
 class BookDetailScreen extends StatefulWidget {
@@ -17,11 +20,33 @@ class _BookDetailScreenState extends State<BookDetailScreen> {
   bool _isSaving = false;
   final FirestoreService _firestoreService = FirestoreService();
   Book? _book;
+  Hold? _activeHold;
+  StreamSubscription<Hold?>? _holdSub;
 
   @override
   void initState() {
     super.initState();
     _fetchBook();
+    _listenActiveHold();
+  }
+
+  @override
+  void dispose() {
+    _holdSub?.cancel();
+    super.dispose();
+  }
+
+  void _listenActiveHold() {
+    final userId = FirebaseAuth.instance.currentUser?.uid;
+    if (userId != null) {
+      _holdSub = _firestoreService
+          .getActiveUserHoldForBookStream(userId, widget.bookId)
+          .listen((hold) {
+        if (mounted) {
+          setState(() => _activeHold = hold);
+        }
+      });
+    }
   }
 
   Future<void> _fetchBook() async {
@@ -37,26 +62,45 @@ class _BookDetailScreenState extends State<BookDetailScreen> {
 
   Future<void> _reserveOrHold(
       BuildContext context, Book book) async {
-    if (book.status == BookStatus.available) {
+    if (book.availableCopies > 0) {
       // Available — place directly with confirmation
       await _confirmAndPlace(context, book);
     } else {
-      // Unavailable — navigate to Hold Request screen (M02 flow)
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Hold request feature coming soon!'),
-          duration: Duration(seconds: 2),
-        ),
+      // Unavailable — navigate to Hold Request screen
+      await Navigator.pushNamed(
+        context,
+        AppRoutes.holdRequest,
+        arguments: book.id,
       );
+      _fetchBook();
     }
   }
 
   Future<void> _confirmAndPlace(
       BuildContext context, Book book) async {
-    // Capture before any await to satisfy use_build_context_synchronously.
     final messenger = ScaffoldMessenger.of(context);
-    final nav = Navigator.of(context);
+    final userId = FirebaseAuth.instance.currentUser?.uid;
+
+    if (userId == null) {
+      messenger.showSnackBar(
+        const SnackBar(
+          content: Text('Please log in to reserve a book.'),
+          backgroundColor: AppTheme.red,
+        ),
+      );
+      return;
+    }
+
+    if (_activeHold != null) {
+      messenger.showSnackBar(
+        const SnackBar(
+          content: Text('You already have an active hold on this book.'),
+          backgroundColor: AppTheme.orange,
+        ),
+      );
+      return;
+    }
+
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
@@ -77,15 +121,25 @@ class _BookDetailScreenState extends State<BookDetailScreen> {
             Container(
               padding: const EdgeInsets.all(10),
               decoration: BoxDecoration(
-                color: const Color(0xFFF3F0FF),
+                color: const Color(0xFFF0FDF4),
                 borderRadius: BorderRadius.circular(8),
-                border: Border.all(color: const Color(0xFFB39DDB)),
+                border: Border.all(color: const Color(0xFFBBF7D0)),
               ),
-              child: Text(
-                'DEMO — This reservation is simulated.',
-                style: GoogleFonts.inter(
-                    fontSize: 12, color: const Color(0xFF4527A0),
-                    fontWeight: FontWeight.w500),
+              child: Row(
+                children: [
+                  const Icon(Icons.info_outline_rounded,
+                      size: 16, color: AppTheme.success),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      'A copy will be held at the Circulation Desk. Hold expires in 48 hours.',
+                      style: GoogleFonts.inter(
+                          fontSize: 12,
+                          color: const Color(0xFF166534),
+                          fontWeight: FontWeight.w500),
+                    ),
+                  ),
+                ],
               ),
             ),
           ],
@@ -104,8 +158,11 @@ class _BookDetailScreenState extends State<BookDetailScreen> {
     if (confirmed != true || !mounted) return;
     setState(() => _placing = true);
     try {
-      // Simulate hold placement
-      await Future.delayed(const Duration(seconds: 1));
+      await _firestoreService.reserveAvailableBook(
+        userId: userId,
+        bookId: book.id,
+      );
+      await _fetchBook();
       if (!mounted) return;
       messenger.showSnackBar(
         SnackBar(
@@ -116,7 +173,7 @@ class _BookDetailScreenState extends State<BookDetailScreen> {
               const SizedBox(width: 8),
               Expanded(
                 child: Text(
-                  'Reserved "${_book!.title}" (demo).',
+                  'Reserved "${book.title}". Ready for pickup!',
                   style: GoogleFonts.inter(fontWeight: FontWeight.w500),
                 ),
               ),
@@ -126,7 +183,17 @@ class _BookDetailScreenState extends State<BookDetailScreen> {
           duration: const Duration(seconds: 3),
         ),
       );
+    } on DuplicateHoldException catch (e) {
+      if (!mounted) return;
+      messenger.showSnackBar(
+        SnackBar(
+          content: Text(e.message),
+          backgroundColor: AppTheme.orange,
+          duration: const Duration(seconds: 3),
+        ),
+      );
     } catch (e) {
+      if (!mounted) return;
       messenger.showSnackBar(
         SnackBar(
           content: Text('Reservation failed: $e'),
@@ -258,25 +325,52 @@ class _BookDetailScreenState extends State<BookDetailScreen> {
                   ),
                   const SizedBox(height: 24),
 
-                  // ── Catalogue / Demo notice ────────────────────────
+                  // ── Library Hold Info Notice ────────────────────────
                   Container(
                     padding: const EdgeInsets.symmetric(
-                        horizontal: 10, vertical: 6),
+                        horizontal: 12, vertical: 8),
                     decoration: BoxDecoration(
-                      color: const Color(0xFFF3F0FF),
+                      color: _book!.availableCopies > 0
+                          ? const Color(0xFFF0FDF4)
+                          : const Color(0xFFFFFBEB),
                       borderRadius: BorderRadius.circular(8),
-                      border: Border.all(color: const Color(0xFFB39DDB)),
+                      border: Border.all(
+                        color: _book!.availableCopies > 0
+                            ? const Color(0xFFBBF7D0)
+                            : const Color(0xFFFDE68A),
+                      ),
                     ),
-                    child: Text(
-                      'DEMO — Availability shown is simulated sample data.',
-                      style: GoogleFonts.inter(
-                          fontSize: 11, color: const Color(0xFF4527A0)),
+                    child: Row(
+                      children: [
+                        Icon(
+                          Icons.info_outline_rounded,
+                          size: 15,
+                          color: _book!.availableCopies > 0
+                              ? AppTheme.success
+                              : AppTheme.orange,
+                        ),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: Text(
+                            _book!.availableCopies > 0
+                                ? 'Available copies can be reserved and held for 48 hours.'
+                                : 'All copies are loaned out. Join the queue to auto-reserve the next return.',
+                            style: GoogleFonts.inter(
+                              fontSize: 11,
+                              color: _book!.availableCopies > 0
+                                  ? const Color(0xFF166534)
+                                  : const Color(0xFF92400E),
+                              fontWeight: FontWeight.w500,
+                            ),
+                          ),
+                        ),
+                      ],
                     ),
                   ),
                   const SizedBox(height: 20),
 
                   // ── CTAs ──────────────────────────────────────────
-                  if (false) ...[
+                  if (_activeHold != null) ...[
                     _AlreadyHeldBanner(),
                     const SizedBox(height: 10),
                   ] else ...[
@@ -295,7 +389,7 @@ class _BookDetailScreenState extends State<BookDetailScreen> {
                                     color: Colors.white, strokeWidth: 2))
                             : const Icon(Icons.bookmark_add_rounded, size: 20),
                         label: Text(
-                          _book!.status == BookStatus.available
+                          _book!.availableCopies > 0
                               ? 'Reserve / Place Hold'
                               : 'Join the Queue (${_book!.holdCount} waiting)',
                           style: GoogleFonts.inter(
