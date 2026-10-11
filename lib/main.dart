@@ -42,7 +42,12 @@ import 'package:read_space/services/auth_service.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
+  try {
+    await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
+  } catch (e) {
+    // Log the error but allow the app to continue for platforms that may not need Firebase
+    debugPrint('Firebase initialization error: $e');
+  }
   runApp(const ReadSpaceApp());
 }
 
