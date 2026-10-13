@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:read_space/main.dart';
 import 'package:read_space/models/book.dart';
+import 'package:read_space/models/hold.dart';
 import 'package:read_space/services/firestore_service.dart';
 
 class BookDetailScreen extends StatefulWidget {
@@ -37,17 +39,45 @@ class _BookDetailScreenState extends State<BookDetailScreen> {
 
   Future<void> _reserveOrHold(
       BuildContext context, Book book) async {
-    if (book.status == BookStatus.available) {
-      // Available — place directly with confirmation
-      await _confirmAndPlace(context, book);
-    } else {
-      // Unavailable — navigate to Hold Request screen (M02 flow)
+    final userId = FirebaseAuth.instance.currentUser?.uid;
+    if (userId == null) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text('Hold request feature coming soon!'),
-          duration: Duration(seconds: 2),
+          content: Text('Please log in to reserve or place a hold'),
+          backgroundColor: AppTheme.red,
         ),
+      );
+      return;
+    }
+
+    // Check for duplicate hold
+    try {
+      final hasExistingHold = await _firestoreService.hasActiveHold(userId, book.id);
+      if (hasExistingHold) {
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('You already have an active hold on this book'),
+            backgroundColor: AppTheme.orange,
+          ),
+        );
+        return;
+      }
+    } catch (e) {
+      print('Error checking existing hold: $e');
+    }
+
+    if (book.status == BookStatus.available && book.availableCopies > 0) {
+      // Available — place directly with confirmation
+      await _confirmAndPlace(context, book);
+    } else {
+      // Unavailable — navigate to Hold Request screen
+      if (!mounted) return;
+      Navigator.pushNamed(
+        context,
+        AppRoutes.holdRequest,
+        arguments: book.id,
       );
     }
   }
@@ -74,19 +104,10 @@ class _BookDetailScreenState extends State<BookDetailScreen> {
                 style: GoogleFonts.inter(
                     fontSize: 13, color: AppTheme.secondaryText)),
             const SizedBox(height: 12),
-            Container(
-              padding: const EdgeInsets.all(10),
-              decoration: BoxDecoration(
-                color: const Color(0xFFF3F0FF),
-                borderRadius: BorderRadius.circular(8),
-                border: Border.all(color: const Color(0xFFB39DDB)),
-              ),
-              child: Text(
-                'DEMO — This reservation is simulated.',
-                style: GoogleFonts.inter(
-                    fontSize: 12, color: const Color(0xFF4527A0),
-                    fontWeight: FontWeight.w500),
-              ),
+            Text(
+              'Reserve this book now?',
+              style: GoogleFonts.inter(
+                  fontSize: 13, color: AppTheme.textPrimary),
             ),
           ],
         ),
@@ -104,8 +125,24 @@ class _BookDetailScreenState extends State<BookDetailScreen> {
     if (confirmed != true || !mounted) return;
     setState(() => _placing = true);
     try {
-      // Simulate hold placement
-      await Future.delayed(const Duration(seconds: 1));
+      final userId = FirebaseAuth.instance.currentUser?.uid;
+      if (userId == null) {
+        throw Exception('User not logged in');
+      }
+
+      // Create hold for available book
+      final hold = Hold(
+        id: DateTime.now().millisecondsSinceEpoch.toString(),
+        userId: userId,
+        bookId: book.id,
+        createdAt: DateTime.now(),
+        holdStatus: HoldStatus.ready,
+        queuePosition: 1,
+        readyAt: DateTime.now(),
+      );
+
+      await _firestoreService.placeHoldForAvailableBook(hold, book.id);
+
       if (!mounted) return;
       messenger.showSnackBar(
         SnackBar(
@@ -116,7 +153,7 @@ class _BookDetailScreenState extends State<BookDetailScreen> {
               const SizedBox(width: 8),
               Expanded(
                 child: Text(
-                  'Reserved "${_book!.title}" (demo).',
+                  'Reserved "${_book!.title}" successfully!',
                   style: GoogleFonts.inter(fontWeight: FontWeight.w500),
                 ),
               ),
@@ -126,7 +163,11 @@ class _BookDetailScreenState extends State<BookDetailScreen> {
           duration: const Duration(seconds: 3),
         ),
       );
+
+      // Refresh book data
+      await _fetchBook();
     } catch (e) {
+      if (!mounted) return;
       messenger.showSnackBar(
         SnackBar(
           content: Text('Reservation failed: $e'),
@@ -258,23 +299,6 @@ class _BookDetailScreenState extends State<BookDetailScreen> {
                   ),
                   const SizedBox(height: 24),
 
-                  // ── Catalogue / Demo notice ────────────────────────
-                  Container(
-                    padding: const EdgeInsets.symmetric(
-                        horizontal: 10, vertical: 6),
-                    decoration: BoxDecoration(
-                      color: const Color(0xFFF3F0FF),
-                      borderRadius: BorderRadius.circular(8),
-                      border: Border.all(color: const Color(0xFFB39DDB)),
-                    ),
-                    child: Text(
-                      'DEMO — Availability shown is simulated sample data.',
-                      style: GoogleFonts.inter(
-                          fontSize: 11, color: const Color(0xFF4527A0)),
-                    ),
-                  ),
-                  const SizedBox(height: 20),
-
                   // ── CTAs ──────────────────────────────────────────
                   if (false) ...[
                     _AlreadyHeldBanner(),
@@ -326,7 +350,7 @@ class _BookDetailScreenState extends State<BookDetailScreen> {
                                     if (!mounted) return;
                                     messenger.showSnackBar(
                                       SnackBar(
-                                        content: Text('"${_book!.title}" saved to your list (demo).'),
+                                        content: Text('"${_book!.title}" saved to your list'),
                                         duration: const Duration(seconds: 2),
                                       ),
                                     );
@@ -400,29 +424,44 @@ class _BookCoverSection extends StatelessWidget {
               ),
             ],
           ),
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              const Icon(Icons.menu_book_rounded,
-                  color: Colors.white38, size: 52),
-              const SizedBox(height: 8),
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 12),
-                child: Text(
-                  book.genre.toUpperCase(),
-                  textAlign: TextAlign.center,
-                  style: GoogleFonts.inter(
-                    fontSize: 8,
-                    color: Colors.white60,
-                    fontWeight: FontWeight.w700,
-                    letterSpacing: 1,
+          child: book.coverImageUrl != null && book.coverImageUrl!.isNotEmpty
+              ? ClipRRect(
+                  borderRadius: BorderRadius.circular(12),
+                  child: Image.network(
+                    book.coverImageUrl!,
+                    fit: BoxFit.cover,
+                    errorBuilder: (context, error, stackTrace) {
+                      return _buildPlaceholder();
+                    },
                   ),
-                ),
-              ),
-            ],
-          ),
+                )
+              : _buildPlaceholder(),
         ),
       ),
+    );
+  }
+
+  Widget _buildPlaceholder() {
+    return Column(
+      mainAxisAlignment: MainAxisAlignment.center,
+      children: [
+        const Icon(Icons.menu_book_rounded,
+            color: Colors.white38, size: 52),
+        const SizedBox(height: 8),
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 12),
+          child: Text(
+            book.genre.toUpperCase(),
+            textAlign: TextAlign.center,
+            style: GoogleFonts.inter(
+              fontSize: 8,
+              color: Colors.white60,
+              fontWeight: FontWeight.w700,
+              letterSpacing: 1,
+            ),
+          ),
+        ),
+      ],
     );
   }
 }

@@ -118,9 +118,15 @@ class FirestoreService {
         .where('userId', isEqualTo: userId)
         .snapshots()
         .map((snapshot) {
-      final holds = snapshot.docs.map((doc) {
-        return Hold.fromJson(doc.data() as Map<String, dynamic>);
-      }).toList();
+      final holds = <Hold>[];
+      for (final doc in snapshot.docs) {
+        try {
+          holds.add(Hold.fromJson(doc.data() as Map<String, dynamic>));
+        } catch (e) {
+          print('⚠️ Skipping invalid hold ${doc.id}: $e');
+          // Skip this hold but continue loading others
+        }
+      }
       holds.sort((a, b) => b.createdAt.compareTo(a.createdAt));
       return holds;
     });
@@ -133,9 +139,16 @@ class FirestoreService {
           .where('userId', isEqualTo: userId)
           .orderBy('createdAt', descending: true)
           .get();
-      return snapshot.docs.map((doc) {
-        return Hold.fromJson(doc.data() as Map<String, dynamic>);
-      }).toList();
+      final holds = <Hold>[];
+      for (final doc in snapshot.docs) {
+        try {
+          holds.add(Hold.fromJson(doc.data() as Map<String, dynamic>));
+        } catch (e) {
+          print('⚠️ Skipping invalid hold ${doc.id}: $e');
+          // Skip this hold but continue loading others
+        }
+      }
+      return holds;
     } catch (e) {
       throw Exception('Failed to get holds: $e');
     }
@@ -162,9 +175,79 @@ class FirestoreService {
   // Cancel hold
   Future<void> cancelHold(String holdId) async {
     try {
-      await _holdsCollection.doc(holdId).update({
-        'holdStatus': 'cancelled',
-      });
+      // Get the hold to find the bookId
+      final holdDoc = await _holdsCollection.doc(holdId).get();
+      if (!holdDoc.exists) {
+        // Hold already deleted, nothing to do
+        print('ℹ️ Hold $holdId not found, already cancelled/deleted');
+        return;
+      }
+
+      final holdData = holdDoc.data() as Map<String, dynamic>;
+      final bookId = holdData['bookId'] as String;
+      final currentStatus = holdData['holdStatus'] as String?;
+
+      // Only update if hold is still active
+      if (currentStatus == 'pending' || currentStatus == 'ready') {
+        // Cancel the hold
+        await _holdsCollection.doc(holdId).update({
+          'holdStatus': 'cancelled',
+        });
+
+        // Update book - decrement hold count
+        await _booksCollection.doc(bookId).update({
+          'holdCount': FieldValue.increment(-1),
+        });
+
+        // If the hold was ready, increment available copies
+        if (currentStatus == 'ready') {
+          await _booksCollection.doc(bookId).update({
+            'availableCopies': FieldValue.increment(1),
+            'status': 'available',
+          });
+
+          // Update next pending hold to ready if exists
+          final nextPendingHoldsSnapshot = await _holdsCollection
+              .where('bookId', isEqualTo: bookId)
+              .where('holdStatus', isEqualTo: 'pending')
+              .orderBy('createdAt')
+              .limit(1)
+              .get();
+
+          if (nextPendingHoldsSnapshot.docs.isNotEmpty) {
+            final nextHoldDoc = nextPendingHoldsSnapshot.docs.first;
+            final nextHoldId = nextHoldDoc.id;
+            final now = DateTime.now();
+            final expiresAt = now.add(const Duration(hours: 48));
+
+            await _holdsCollection.doc(nextHoldId).update({
+              'holdStatus': 'ready',
+              'readyAt': now.toIso8601String(),
+              'expiresAt': expiresAt.toIso8601String(),
+              'queuePosition': 1,
+            });
+
+            // Reduce available copies again
+            await _booksCollection.doc(bookId).update({
+              'availableCopies': FieldValue.increment(-1),
+            });
+
+            // Update queue positions for remaining holds
+            final remainingHoldsSnapshot = await _holdsCollection
+                .where('bookId', isEqualTo: bookId)
+                .where('holdStatus', isEqualTo: 'pending')
+                .orderBy('createdAt')
+                .get();
+
+            for (int i = 0; i < remainingHoldsSnapshot.docs.length; i++) {
+              final holdDoc = remainingHoldsSnapshot.docs[i];
+              await _holdsCollection.doc(holdDoc.id).update({
+                'queuePosition': i + 1,
+              });
+            }
+          }
+        }
+      }
     } catch (e) {
       throw Exception('Failed to cancel hold: $e');
     }
@@ -181,6 +264,150 @@ class FirestoreService {
       return snapshot.docs.isNotEmpty;
     } catch (e) {
       throw Exception('Failed to check hold: $e');
+    }
+  }
+
+  // Clear all holds for a specific user (for testing purposes)
+  Future<void> clearUserHolds(String userId) async {
+    try {
+      final snapshot = await _holdsCollection
+          .where('userId', isEqualTo: userId)
+          .get();
+      
+      final batch = FirebaseFirestore.instance.batch();
+      for (final doc in snapshot.docs) {
+        batch.delete(doc.reference);
+      }
+      await batch.commit();
+      print('✅ Cleared ${snapshot.docs.length} holds for user $userId');
+    } catch (e) {
+      throw Exception('Failed to clear holds: $e');
+    }
+  }
+
+  // Place hold for available book (immediate reservation)
+  Future<void> placeHoldForAvailableBook(Hold hold, String bookId) async {
+    try {
+      // Create the hold
+      await _holdsCollection.doc(hold.id).set(hold.toJson());
+
+      // Update book - reduce available copies and increment hold count
+      final bookDoc = await _booksCollection.doc(bookId).get();
+      if (bookDoc.exists) {
+        final bookData = bookDoc.data() as Map<String, dynamic>;
+        final currentAvailable = bookData['availableCopies'] as int? ?? 0;
+        final currentHoldCount = bookData['holdCount'] as int? ?? 0;
+
+        await _booksCollection.doc(bookId).update({
+          'availableCopies': currentAvailable - 1,
+          'holdCount': currentHoldCount + 1,
+          'status': (currentAvailable - 1) == 0 ? 'onLoan' : 'available',
+        });
+      }
+    } catch (e) {
+      throw Exception('Failed to place hold: $e');
+    }
+  }
+
+  // Join queue for unavailable book
+  Future<void> joinQueueForBook(Hold hold, String bookId) async {
+    try {
+      // Create the hold
+      await _holdsCollection.doc(hold.id).set(hold.toJson());
+
+      // Update book - increment hold count only
+      await _booksCollection.doc(bookId).update({
+        'holdCount': FieldValue.increment(1),
+      });
+    } catch (e) {
+      throw Exception('Failed to join queue: $e');
+    }
+  }
+
+  // Process book return (check-in) - automatically update holds
+  Future<void> processBookReturn(String bookId) async {
+    try {
+      // Get the book
+      final bookDoc = await _booksCollection.doc(bookId).get();
+      if (!bookDoc.exists) {
+        throw Exception('Book not found');
+      }
+
+      final bookData = bookDoc.data() as Map<String, dynamic>;
+      final currentAvailable = bookData['availableCopies'] as int? ?? 0;
+      final currentHoldCount = bookData['holdCount'] as int? ?? 0;
+
+      // Increment available copies
+      final newAvailable = currentAvailable + 1;
+      await _booksCollection.doc(bookId).update({
+        'availableCopies': newAvailable,
+        'status': 'available',
+      });
+
+      // If there are pending holds, update the first one to ready
+      if (currentHoldCount > 0) {
+        // Find the first pending hold for this book
+        final pendingHoldsSnapshot = await _holdsCollection
+            .where('bookId', isEqualTo: bookId)
+            .where('holdStatus', isEqualTo: 'pending')
+            .orderBy('createdAt')
+            .limit(1)
+            .get();
+
+        if (pendingHoldsSnapshot.docs.isNotEmpty) {
+          final firstHoldDoc = pendingHoldsSnapshot.docs.first;
+          final holdId = firstHoldDoc.id;
+
+          // Update hold to ready status
+          final now = DateTime.now();
+          final expiresAt = now.add(const Duration(hours: 48));
+
+          await _holdsCollection.doc(holdId).update({
+            'holdStatus': 'ready',
+            'readyAt': now.toIso8601String(),
+            'expiresAt': expiresAt.toIso8601String(),
+            'queuePosition': 1,
+          });
+
+          // Reduce available copies (the book is now reserved for this user)
+          await _booksCollection.doc(bookId).update({
+            'availableCopies': newAvailable - 1,
+            'status': newAvailable - 1 == 0 ? 'onLoan' : 'available',
+          });
+
+          // Update queue positions for remaining pending holds
+          final remainingHoldsSnapshot = await _holdsCollection
+              .where('bookId', isEqualTo: bookId)
+              .where('holdStatus', isEqualTo: 'pending')
+              .orderBy('createdAt')
+              .get();
+
+          for (int i = 0; i < remainingHoldsSnapshot.docs.length; i++) {
+            final holdDoc = remainingHoldsSnapshot.docs[i];
+            await _holdsCollection.doc(holdDoc.id).update({
+              'queuePosition': i + 1,
+            });
+          }
+        }
+      }
+    } catch (e) {
+      throw Exception('Failed to process book return: $e');
+    }
+  }
+
+  // Manually update hold to ready (for admin use)
+  Future<void> updateHoldToReady(String holdId) async {
+    try {
+      final now = DateTime.now();
+      final expiresAt = now.add(const Duration(hours: 48));
+
+      await _holdsCollection.doc(holdId).update({
+        'holdStatus': 'ready',
+        'readyAt': now.toIso8601String(),
+        'expiresAt': expiresAt.toIso8601String(),
+      });
+    } catch (e) {
+      throw Exception('Failed to update hold to ready: $e');
     }
   }
 

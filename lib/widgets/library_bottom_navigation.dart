@@ -14,9 +14,9 @@ class LibraryBottomNavigation extends StatelessWidget {
   Widget build(BuildContext context) {
     const items = [
       (Icons.home_outlined, 'Home'),
-      (Icons.menu_book_outlined, 'Catalog'),
+      (Icons.search_outlined, 'Catalog'),
       (Icons.calendar_month_outlined, 'Bookings'),
-      (Icons.person_outline_rounded, 'Profile'),
+      (Icons.person_outline, 'Profile'),
     ];
 
     final theme = Theme.of(context);

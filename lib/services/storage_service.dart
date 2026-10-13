@@ -3,8 +3,18 @@ import 'package:image_picker/image_picker.dart';
 import 'dart:io';
 
 class StorageService {
-  final FirebaseStorage _storage = FirebaseStorage.instance;
+  late FirebaseStorage _storage;
   final ImagePicker _picker = ImagePicker();
+
+  StorageService() {
+    try {
+      _storage = FirebaseStorage.instance;
+      print('✅ Firebase Storage initialized');
+    } catch (e) {
+      print('❌ Error initializing Firebase Storage: $e');
+      rethrow;
+    }
+  }
 
   // Upload image file
   Future<String?> uploadImage({
@@ -13,12 +23,40 @@ class StorageService {
     required String fileName,
   }) async {
     try {
+      print('📤 Starting upload: $path/$fileName');
+      print('📁 File exists: ${file.existsSync()}');
+      print('📁 File size: ${file.lengthSync()} bytes');
+
       final ref = _storage.ref().child('$path/$fileName');
+      print('📦 Storage ref created: ${ref.fullPath}');
+
       final uploadTask = ref.putFile(file);
+      print('⏳ Upload task started');
+
+      // Listen to upload progress
+      uploadTask.snapshotEvents.listen((TaskSnapshot snapshot) {
+        print('📊 Upload progress: ${(snapshot.bytesTransferred / snapshot.totalBytes) * 100}%');
+      });
+
       final snapshot = await uploadTask;
+      print('✅ Upload completed');
+
       final downloadUrl = await snapshot.ref.getDownloadURL();
+      print('🔗 Download URL: $downloadUrl');
+
       return downloadUrl;
+    } on FirebaseException catch (e) {
+      print('❌ Firebase Storage error: ${e.code} - ${e.message}');
+      if (e.code == 'object-not-found') {
+        throw Exception('Storage bucket not found. Please check Firebase Storage configuration.');
+      } else if (e.code == 'unauthorized') {
+        throw Exception('Not authorized to upload. Please check storage rules.');
+      } else if (e.code == 'quota-exceeded') {
+        throw Exception('Storage quota exceeded. Please check your Firebase plan.');
+      }
+      throw Exception('Firebase Storage error: ${e.message}');
     } catch (e) {
+      print('❌ Upload error: $e');
       throw Exception('Failed to upload image: $e');
     }
   }

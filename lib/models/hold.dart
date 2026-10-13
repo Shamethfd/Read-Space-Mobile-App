@@ -1,7 +1,6 @@
 enum HoldStatus {
   pending,
   ready,
-  expired,
   cancelled,
 }
 
@@ -27,16 +26,31 @@ class Hold {
   });
 
   factory Hold.fromJson(Map<String, dynamic> json) {
+    final statusString = json['holdStatus'] as String?;
+    HoldStatus status;
+    
+    try {
+      status = HoldStatus.values.firstWhere(
+        (e) => e.name == statusString,
+        orElse: () {
+          // Handle legacy 'expired' status by treating it as cancelled
+          if (statusString == 'expired') {
+            return HoldStatus.cancelled;
+          }
+          return HoldStatus.pending;
+        },
+      );
+    } catch (e) {
+      status = HoldStatus.pending;
+    }
+    
     return Hold(
       id: json['id'] as String,
       bookId: json['bookId'] as String,
       userId: json['userId'] as String,
       createdAt: DateTime.parse(json['createdAt'] as String),
-      holdStatus: HoldStatus.values.firstWhere(
-        (e) => e.name == json['holdStatus'],
-        orElse: () => HoldStatus.pending,
-      ),
-      queuePosition: json['queuePosition'] as int,
+      holdStatus: status,
+      queuePosition: json['queuePosition'] as int? ?? 0,
       readyAt: json['readyAt'] != null
           ? DateTime.parse(json['readyAt'] as String)
           : null,

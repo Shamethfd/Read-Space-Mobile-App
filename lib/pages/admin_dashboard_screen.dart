@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:read_space/main.dart' show AppTheme, AppRoutes;
 import 'package:read_space/widgets/admin_stat_card.dart';
 import 'package:read_space/widgets/overdue_alert_card.dart';
@@ -31,13 +32,11 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                   children: [
                     _buildLiveStatistics(),
                     const SizedBox(height: 24),
+                    _buildLibrarianManagement(),
+                    const SizedBox(height: 24),
                     _buildNoticeManagement(),
                     const SizedBox(height: 24),
                     _buildAppealsManagement(),
-                    const SizedBox(height: 24),
-                    _buildOverdueAlerts(),
-                    const SizedBox(height: 24),
-                    _buildRecentTransactions(),
                   ],
                 ),
               ),
@@ -245,13 +244,32 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(
-            'Librarian Management',
-            style: GoogleFonts.poppins(
-              fontSize: 16,
-              fontWeight: FontWeight.w600,
-              color: AppTheme.textPrimary,
-            ),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Text(
+                'Librarian Management',
+                style: GoogleFonts.poppins(
+                  fontSize: 16,
+                  fontWeight: FontWeight.w600,
+                  color: AppTheme.textPrimary,
+                ),
+              ),
+              TextButton.icon(
+                onPressed: () => Navigator.pushNamed(context, AppRoutes.createLibrarian),
+                icon: const Icon(Icons.add, size: 16),
+                label: Text(
+                  'Add New',
+                  style: GoogleFonts.poppins(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+                style: TextButton.styleFrom(
+                  foregroundColor: AppTheme.primaryBlue,
+                ),
+              ),
+            ],
           ),
           const SizedBox(height: 8),
           Text(
@@ -262,35 +280,225 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
             ),
           ),
           const SizedBox(height: 16),
-          InkWell(
-            onTap: () => Navigator.pushNamed(context, AppRoutes.createLibrarian),
-            borderRadius: BorderRadius.circular(12),
-            child: Container(
-              padding: const EdgeInsets.symmetric(vertical: 14),
-              decoration: BoxDecoration(
-                color: const Color(0xFF6366F1),
-                borderRadius: BorderRadius.circular(12),
-              ),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.center,
+          _buildLibrariansList(),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildLibrariansList() {
+    return StreamBuilder<QuerySnapshot>(
+      stream: FirebaseFirestore.instance
+          .collection('users')
+          .where('role', isEqualTo: 'librarian')
+          .snapshots(),
+      builder: (context, snapshot) {
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return const Center(child: CircularProgressIndicator());
+        }
+
+        if (snapshot.hasError) {
+          return Text(
+            'Error loading librarians',
+            style: GoogleFonts.poppins(
+              fontSize: 12,
+              color: AppTheme.red,
+            ),
+          );
+        }
+
+        final librarians = snapshot.data?.docs ?? [];
+
+        if (librarians.isEmpty) {
+          return Container(
+            padding: const EdgeInsets.all(24),
+            decoration: BoxDecoration(
+              color: const Color(0xFFF7F8FA),
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: Center(
+              child: Column(
                 children: [
-                  const Icon(Icons.person_add_outlined, color: Colors.white, size: 20),
-                  const SizedBox(width: 8),
+                  Icon(
+                    Icons.person_outline,
+                    size: 40,
+                    color: AppTheme.secondaryText.withValues(alpha: 0.5),
+                  ),
+                  const SizedBox(height: 8),
                   Text(
-                    'Create Librarian',
+                    'No librarians added yet',
                     style: GoogleFonts.poppins(
-                      fontSize: 14,
-                      fontWeight: FontWeight.w600,
-                      color: Colors.white,
+                      fontSize: 12,
+                      color: AppTheme.secondaryText,
                     ),
                   ),
                 ],
               ),
             ),
-          ),
+          );
+        }
+
+        return Column(
+          children: librarians.map((doc) {
+            final data = doc.data() as Map<String, dynamic>;
+            final name = data['fullName'] as String? ?? 'Unknown';
+            final email = data['universityEmail'] as String? ?? 'No email';
+            final librarianId = doc.id;
+
+            return Container(
+              margin: const EdgeInsets.only(bottom: 8),
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: const Color(0xFFF7F8FA),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Row(
+                children: [
+                  Container(
+                    width: 40,
+                    height: 40,
+                    decoration: BoxDecoration(
+                      color: AppTheme.primaryBlue.withValues(alpha: 0.1),
+                      borderRadius: BorderRadius.circular(20),
+                    ),
+                    child: Icon(
+                      Icons.person,
+                      color: AppTheme.primaryBlue,
+                      size: 20,
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          name,
+                          style: GoogleFonts.poppins(
+                            fontSize: 14,
+                            fontWeight: FontWeight.w600,
+                            color: AppTheme.textPrimary,
+                          ),
+                        ),
+                        const SizedBox(height: 2),
+                        Text(
+                          email,
+                          style: GoogleFonts.poppins(
+                            fontSize: 11,
+                            color: AppTheme.secondaryText,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  Row(
+                    children: [
+                      IconButton(
+                        onPressed: () => _editLibrarian(librarianId, data),
+                        icon: const Icon(Icons.edit_outlined, size: 18),
+                        color: Colors.orange,
+                        padding: EdgeInsets.zero,
+                        constraints: const BoxConstraints(),
+                      ),
+                      const SizedBox(width: 8),
+                      IconButton(
+                        onPressed: () => _deleteLibrarian(librarianId, name),
+                        icon: const Icon(Icons.delete_outline, size: 18),
+                        color: AppTheme.red,
+                        padding: EdgeInsets.zero,
+                        constraints: const BoxConstraints(),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            );
+          }).toList(),
+        );
+      },
+    );
+  }
+
+  Future<void> _editLibrarian(String librarianId, Map<String, dynamic> data) async {
+    final result = await Navigator.pushNamed(
+      context,
+      AppRoutes.createLibrarian,
+      arguments: {...data, 'uid': librarianId},
+    );
+    
+    if (result == true && mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Librarian updated successfully'),
+          backgroundColor: AppTheme.success,
+          duration: const Duration(seconds: 2),
+        ),
+      );
+    }
+  }
+
+  Future<void> _deleteLibrarian(String librarianId, String name) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: const Text('Delete Librarian'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(name,
+                style: GoogleFonts.poppins(
+                    fontWeight: FontWeight.w600, fontSize: 15)),
+            const SizedBox(height: 12),
+            Text(
+              'This action cannot be undone. Are you sure you want to delete this librarian account?',
+              style: GoogleFonts.poppins(
+                  fontSize: 12, color: AppTheme.secondaryText),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.pop(ctx, false),
+              child: const Text('Cancel')),
+          ElevatedButton(
+              onPressed: () => Navigator.pop(ctx, true),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: AppTheme.red,
+                foregroundColor: Colors.white,
+              ),
+              child: const Text('Delete')),
         ],
       ),
     );
+
+    if (confirmed != true) return;
+
+    try {
+      await FirebaseFirestore.instance
+          .collection('users')
+          .doc(librarianId)
+          .delete();
+      
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Librarian deleted successfully'),
+          backgroundColor: AppTheme.success,
+          duration: const Duration(seconds: 2),
+        ),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Failed to delete librarian: $e'),
+          backgroundColor: AppTheme.red,
+          duration: const Duration(seconds: 3),
+        ),
+      );
+    }
   }
 
   Widget _buildLiveStatistics() {

@@ -2,7 +2,11 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:image_picker/image_picker.dart';
+import 'dart:io';
 import 'package:read_space/main.dart' show AppTheme, AppRoutes;
+import 'package:read_space/services/cloudinary_service.dart';
+import 'package:read_space/widgets/library_bottom_navigation.dart';
 
 class LibrarianProfileScreen extends StatefulWidget {
   const LibrarianProfileScreen({super.key});
@@ -14,6 +18,23 @@ class LibrarianProfileScreen extends StatefulWidget {
 class _LibrarianProfileScreenState extends State<LibrarianProfileScreen> {
   int _currentIndex = 3;
   final FirebaseAuth _auth = FirebaseAuth.instance;
+  final FirebaseFirestore _firestore = FirebaseFirestore.instance;
+  final ImagePicker _picker = ImagePicker();
+  final CloudinaryService _cloudinaryService = CloudinaryService();
+
+  File? _profileImage;
+  String? _profileImageUrl;
+  bool _isUploading = false;
+
+  void _handleNavigation(int index) {
+    if (index == 0) {
+      Navigator.pushNamed(context, AppRoutes.librarianDashboard);
+    } else if (index == 1) {
+      Navigator.pushNamed(context, AppRoutes.librarianInventory);
+    } else if (index == 2) {
+      Navigator.pushNamed(context, AppRoutes.librarianAnalytics);
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -42,7 +63,10 @@ class _LibrarianProfileScreenState extends State<LibrarianProfileScreen> {
                 ),
               ),
             ),
-            _buildBottomNavigation(),
+            LibraryBottomNavigation(
+              selectedIndex: _currentIndex,
+              onSelected: _handleNavigation,
+            ),
           ],
         ),
       ),
@@ -91,7 +115,7 @@ class _LibrarianProfileScreenState extends State<LibrarianProfileScreen> {
 
   Widget _buildProfileCard(String userId) {
     return FutureBuilder<DocumentSnapshot>(
-      future: FirebaseFirestore.instance.collection('users').doc(userId).get(),
+      future: _firestore.collection('users').doc(userId).get(),
       builder: (context, snapshot) {
         if (!snapshot.hasData) {
           return const SizedBox();
@@ -101,6 +125,8 @@ class _LibrarianProfileScreenState extends State<LibrarianProfileScreen> {
         final name = userData?['fullName'] ?? 'Librarian';
         final employeeId = userData?['employeeId'] ?? 'N/A';
         final email = userData?['email'] ?? 'N/A';
+        final phoneNumber = userData?['phoneNumber'] ?? 'N/A';
+        final profileImageUrl = userData?['profileImageUrl'];
 
         return Container(
           padding: const EdgeInsets.all(20),
@@ -111,13 +137,42 @@ class _LibrarianProfileScreenState extends State<LibrarianProfileScreen> {
           ),
           child: Column(
             children: [
-              CircleAvatar(
-                radius: 40,
-                backgroundColor: AppTheme.primaryBlue.withValues(alpha: 0.1),
-                child: Icon(
-                  Icons.person,
-                  color: AppTheme.primaryBlue,
-                  size: 40,
+              GestureDetector(
+                onTap: () => _showImagePickerDialog(),
+                child: Stack(
+                  children: [
+                    CircleAvatar(
+                      radius: 40,
+                      backgroundColor: AppTheme.primaryBlue.withValues(alpha: 0.1),
+                      backgroundImage: profileImageUrl != null && profileImageUrl.isNotEmpty
+                          ? NetworkImage(profileImageUrl)
+                          : null,
+                      child: profileImageUrl == null || profileImageUrl.isEmpty
+                          ? Icon(
+                              Icons.person,
+                              color: AppTheme.primaryBlue,
+                              size: 40,
+                            )
+                          : null,
+                    ),
+                    Positioned(
+                      bottom: 0,
+                      right: 0,
+                      child: Container(
+                        padding: const EdgeInsets.all(6),
+                        decoration: BoxDecoration(
+                          color: AppTheme.primaryBlue,
+                          shape: BoxShape.circle,
+                          border: Border.all(color: Colors.white, width: 2),
+                        ),
+                        child: const Icon(
+                          Icons.camera_alt,
+                          color: Colors.white,
+                          size: 14,
+                        ),
+                      ),
+                    ),
+                  ],
                 ),
               ),
               const SizedBox(height: 16),
@@ -146,6 +201,24 @@ class _LibrarianProfileScreenState extends State<LibrarianProfileScreen> {
                   color: AppTheme.secondaryText,
                 ),
               ),
+              const SizedBox(height: 8),
+              if (phoneNumber != 'N/A')
+                Text(
+                  'Phone: $phoneNumber',
+                  style: GoogleFonts.poppins(
+                    fontSize: 13,
+                    color: AppTheme.secondaryText,
+                  ),
+                ),
+              const SizedBox(height: 8),
+              if (email != 'N/A')
+                Text(
+                  'Email: $email',
+                  style: GoogleFonts.poppins(
+                    fontSize: 13,
+                    color: AppTheme.secondaryText,
+                  ),
+                ),
               const SizedBox(height: 20),
               Row(
                 children: [
@@ -176,6 +249,90 @@ class _LibrarianProfileScreenState extends State<LibrarianProfileScreen> {
         );
       },
     );
+  }
+
+  Future<void> _showImagePickerDialog() async {
+    final result = await showDialog<String>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Change Profile Picture'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            ListTile(
+              leading: const Icon(Icons.photo_library),
+              title: const Text('Choose from Gallery'),
+              onTap: () => Navigator.pop(context, 'gallery'),
+            ),
+            ListTile(
+              leading: const Icon(Icons.camera_alt),
+              title: const Text('Take Photo'),
+              onTap: () => Navigator.pop(context, 'camera'),
+            ),
+          ],
+        ),
+      ),
+    );
+
+    if (result == null) return;
+
+    try {
+      final XFile? image = await _picker.pickImage(
+        source: result == 'gallery' ? ImageSource.gallery : ImageSource.camera,
+        imageQuality: 80,
+        maxWidth: 400,
+        maxHeight: 400,
+      );
+
+      if (image != null) {
+        setState(() => _isUploading = true);
+        final user = _auth.currentUser;
+        if (user != null) {
+          try {
+            final url = await _cloudinaryService.uploadImage(
+              imageFile: File(image.path),
+            );
+
+            await _firestore.collection('users').doc(user.uid).set({
+              'profileImageUrl': url,
+            }, SetOptions(merge: true));
+
+            if (mounted) {
+              setState(() {
+                _profileImageUrl = url;
+                _isUploading = false;
+              });
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(
+                  content: Text('Profile picture updated'),
+                  backgroundColor: AppTheme.success,
+                ),
+              );
+            }
+          } catch (e) {
+            if (mounted) {
+              setState(() => _isUploading = false);
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(
+                  content: Text('Failed to upload image: $e'),
+                  backgroundColor: AppTheme.red,
+                ),
+              );
+            }
+          }
+        }
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() => _isUploading = false);
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Failed to update profile picture: $e'),
+            backgroundColor: AppTheme.red,
+          ),
+        );
+      }
+    }
   }
 
   Widget _buildProfileStat({required String label, required String value}) {

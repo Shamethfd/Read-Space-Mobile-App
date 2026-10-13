@@ -29,6 +29,7 @@ class Book {
   final int availableCopies;
   final int holdCount;
   final Color coverColor;
+  final String? coverImageUrl;
 
   Book({
     required this.id,
@@ -46,6 +47,7 @@ class Book {
     required this.availableCopies,
     required this.holdCount,
     required this.coverColor,
+    this.coverImageUrl,
   });
 
   factory Book.fromJson(Map<String, dynamic> json) {
@@ -71,6 +73,7 @@ class Book {
       availableCopies: json['availableCopies'] as int,
       holdCount: json['holdCount'] as int,
       coverColor: Color(int.parse(json['coverColor'] as String)),
+      coverImageUrl: json['coverImageUrl'] as String?,
     );
   }
 
@@ -91,6 +94,7 @@ class Book {
       'availableCopies': availableCopies,
       'holdCount': holdCount,
       'coverColor': coverColor.toARGB32().toString(),
+      if (coverImageUrl != null) 'coverImageUrl': coverImageUrl,
     };
   }
 }

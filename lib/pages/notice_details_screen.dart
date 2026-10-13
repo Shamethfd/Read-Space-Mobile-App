@@ -231,34 +231,36 @@ class _NoticeDetailsScreenState extends State<NoticeDetailsScreen> {
         borderRadius: BorderRadius.circular(12),
         border: Border.all(color: AppTheme.border),
       ),
-      child: Row(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Icon(Icons.attach_file, color: AppTheme.primaryBlue, size: 20),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  'Attachment',
-                  style: GoogleFonts.poppins(
-                    fontSize: 12,
-                    color: AppTheme.secondaryText,
-                  ),
-                ),
-                const SizedBox(height: 2),
-                Text(
-                  'View attached file',
-                  style: GoogleFonts.poppins(
-                    fontSize: 14,
-                    fontWeight: FontWeight.w600,
-                    color: AppTheme.primaryBlue,
-                  ),
-                ),
-              ],
+          Text(
+            'Notice Image',
+            style: GoogleFonts.poppins(
+              fontSize: 12,
+              color: AppTheme.secondaryText,
             ),
           ),
-          const Icon(Icons.chevron_right, color: AppTheme.secondaryText),
+          const SizedBox(height: 12),
+          ClipRRect(
+            borderRadius: BorderRadius.circular(8),
+            child: Image.network(
+              _notice!.attachmentUrl!,
+              fit: BoxFit.cover,
+              errorBuilder: (context, error, stackTrace) {
+                return Container(
+                  height: 200,
+                  decoration: BoxDecoration(
+                    color: AppTheme.pageBackground,
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: const Center(
+                    child: Icon(Icons.broken_image, color: AppTheme.secondaryText),
+                  ),
+                );
+              },
+            ),
+          ),
         ],
       ),
     );

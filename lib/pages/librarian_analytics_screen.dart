@@ -6,6 +6,7 @@ import '../services/analytics_service.dart';
 import '../models/analytics_data.dart';
 import '../widgets/analytics_metric_card.dart';
 import '../widgets/popular_book_item.dart';
+import '../widgets/library_bottom_navigation.dart';
 
 class LibrarianAnalyticsScreen extends StatefulWidget {
   const LibrarianAnalyticsScreen({super.key});
@@ -18,6 +19,16 @@ class _LibrarianAnalyticsScreenState extends State<LibrarianAnalyticsScreen> {
   final AnalyticsService _analyticsService = AnalyticsService();
   late Future<AnalyticsData> _analyticsData;
 
+  void _handleNavigation(int index) {
+    if (index == 0) {
+      Navigator.pushNamed(context, AppRoutes.librarianDashboard);
+    } else if (index == 1) {
+      Navigator.pushNamed(context, AppRoutes.librarianInventory);
+    } else if (index == 3) {
+      Navigator.pushNamed(context, AppRoutes.librarianProfile);
+    }
+  }
+
   @override
   void initState() {
     super.initState();
@@ -28,39 +39,59 @@ class _LibrarianAnalyticsScreenState extends State<LibrarianAnalyticsScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: const Color(0xFFF7F8FA),
-      appBar: AppBar(
-        backgroundColor: Colors.white,
-        elevation: 0,
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back, color: AppTheme.textPrimary),
-          onPressed: () => Navigator.pop(context),
-        ),
-        title: Text(
-          'Analytics',
-          style: GoogleFonts.poppins(
-            fontSize: 18,
-            fontWeight: FontWeight.w600,
-            color: AppTheme.textPrimary,
-          ),
-        ),
-      ),
       body: SafeArea(
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.all(16),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              _buildDateFilter(),
-              const SizedBox(height: 16),
-              _buildMetricCards(),
-              const SizedBox(height: 16),
-              _buildHourlyOccupancyChart(),
-              const SizedBox(height: 16),
-              _buildPopularBooks(),
-              const SizedBox(height: 16),
-              _buildExportButton(),
-            ],
-          ),
+        child: Column(
+          children: [
+            Container(
+              padding: const EdgeInsets.all(16),
+              decoration: const BoxDecoration(
+                color: Colors.white,
+                border: Border(
+                  bottom: BorderSide(color: AppTheme.border),
+                ),
+              ),
+              child: Row(
+                children: [
+                  IconButton(
+                    icon: const Icon(Icons.arrow_back, color: AppTheme.textPrimary),
+                    onPressed: () => Navigator.pop(context),
+                  ),
+                  const SizedBox(width: 8),
+                  Text(
+                    'Analytics',
+                    style: GoogleFonts.poppins(
+                      fontSize: 18,
+                      fontWeight: FontWeight.w600,
+                      color: AppTheme.textPrimary,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            Expanded(
+              child: SingleChildScrollView(
+                padding: const EdgeInsets.all(16),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    _buildDateFilter(),
+                    const SizedBox(height: 16),
+                    _buildMetricCards(),
+                    const SizedBox(height: 16),
+                    _buildHourlyOccupancyChart(),
+                    const SizedBox(height: 16),
+                    _buildPopularBooks(),
+                    const SizedBox(height: 16),
+                    _buildExportButton(),
+                  ],
+                ),
+              ),
+            ),
+            LibraryBottomNavigation(
+              selectedIndex: 2,
+              onSelected: _handleNavigation,
+            ),
+          ],
         ),
       ),
     );

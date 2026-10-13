@@ -305,8 +305,15 @@ class _SubmitAppealScreenState extends State<SubmitAppealScreen> {
             if (value == null || value.trim().isEmpty) {
               return 'Please enter the fine ID';
             }
+            if (value.trim().length < 3) {
+              return 'Fine ID must be at least 3 characters';
+            }
+            if (value.trim().length > 50) {
+              return 'Fine ID must not exceed 50 characters';
+            }
             return null;
           },
+          maxLength: 50,
           style: GoogleFonts.poppins(fontSize: 14, color: AppTheme.textPrimary),
           decoration: InputDecoration(
             hintText: 'e.g., FINE-001',
@@ -354,8 +361,15 @@ class _SubmitAppealScreenState extends State<SubmitAppealScreen> {
             if (value == null || value.trim().isEmpty) {
               return 'Please enter the reason for appeal';
             }
+            if (value.trim().length < 10) {
+              return 'Reason must be at least 10 characters';
+            }
+            if (value.trim().length > 500) {
+              return 'Reason must not exceed 500 characters';
+            }
             return null;
           },
+          maxLength: 500,
           style: GoogleFonts.poppins(fontSize: 14, color: AppTheme.textPrimary),
           decoration: InputDecoration(
             hintText: 'Explain why you are appealing this fine...',
@@ -399,6 +413,15 @@ class _SubmitAppealScreenState extends State<SubmitAppealScreen> {
         TextFormField(
           controller: _additionalNotesController,
           maxLines: 3,
+          validator: (value) {
+            if (value != null && value.trim().isNotEmpty) {
+              if (value.trim().length > 300) {
+                return 'Additional notes must not exceed 300 characters';
+              }
+            }
+            return null;
+          },
+          maxLength: 300,
           style: GoogleFonts.poppins(fontSize: 14, color: AppTheme.textPrimary),
           decoration: InputDecoration(
             hintText: 'Any additional information...',

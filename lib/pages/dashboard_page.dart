@@ -210,12 +210,16 @@ class _DashboardHeader extends StatefulWidget {
 
 class _DashboardHeaderState extends State<_DashboardHeader> {
   final _notificationService = NotificationService();
+  final _firestoreService = FirestoreService();
   int _unreadCount = 0;
+  String? _profileImageUrl;
+  String? _userName;
 
   @override
   void initState() {
     super.initState();
     _loadUnreadCount();
+    _loadUserProfile();
   }
 
   Future<void> _loadUnreadCount() async {
@@ -223,6 +227,21 @@ class _DashboardHeaderState extends State<_DashboardHeader> {
     final count = await _notificationService.getUnreadCount(widget.userId!);
     if (mounted) {
       setState(() => _unreadCount = count);
+    }
+  }
+
+  Future<void> _loadUserProfile() async {
+    if (widget.userId == null) return;
+    try {
+      final userData = await _firestoreService.getUserById(widget.userId!);
+      if (mounted && userData != null) {
+        setState(() {
+          _profileImageUrl = userData['profileImageUrl'] as String?;
+          _userName = userData['fullName'] as String?;
+        });
+      }
+    } catch (e) {
+      print('Error loading user profile: $e');
     }
   }
 
@@ -278,28 +297,40 @@ class _DashboardHeaderState extends State<_DashboardHeader> {
           ],
         ),
         const Spacer(),
-        NotificationBadge(
-          count: _unreadCount,
-          child: IconButton(
-            onPressed: () {
-              Navigator.pushNamed(context, AppRoutes.notifications);
-            },
-            tooltip: 'Notifications',
-            icon: const Icon(
-              Icons.notifications_none_rounded,
-              color: _DashboardColors.text,
+        Row(
+          children: [
+            NotificationBadge(
+              count: _unreadCount,
+              child: IconButton(
+                onPressed: () {
+                  Navigator.pushNamed(context, AppRoutes.notifications);
+                },
+                tooltip: 'Notifications',
+                icon: const Icon(
+                  Icons.notifications_none_rounded,
+                  color: _DashboardColors.text,
+                ),
+              ),
             ),
-          ),
-        ),
-        const SizedBox(width: 2),
-        const CircleAvatar(
-          radius: 19,
-          backgroundColor: Color(0xFFD9E8F5),
-          child: Icon(
-            Icons.person_rounded,
-            color: _DashboardColors.secondary,
-            size: 23,
-          ),
+            const SizedBox(width: 8),
+            GestureDetector(
+              onTap: () => Navigator.pushNamed(context, AppRoutes.profile),
+              child: CircleAvatar(
+                radius: 20,
+                backgroundColor: const Color(0xFFD9E8F5),
+                backgroundImage: _profileImageUrl != null && _profileImageUrl!.isNotEmpty
+                    ? NetworkImage(_profileImageUrl!)
+                    : null,
+                child: _profileImageUrl == null || _profileImageUrl!.isEmpty
+                    ? const Icon(
+                        Icons.person_rounded,
+                        color: _DashboardColors.secondary,
+                        size: 24,
+                      )
+                    : null,
+              ),
+            ),
+          ],
         ),
       ],
     );
@@ -512,8 +543,9 @@ class _RecentReservationCard extends StatelessWidget {
     required this.title,
     required this.subtitle,
     required this.time,
-    required this.icon,
     required this.statusColor,
+    this.coverImageUrl,
+    this.coverColor,
     this.onTap,
   });
 
@@ -522,8 +554,9 @@ class _RecentReservationCard extends StatelessWidget {
   final String title;
   final String subtitle;
   final String time;
-  final IconData icon;
   final Color statusColor;
+  final String? coverImageUrl;
+  final Color? coverColor;
   final VoidCallback? onTap;
 
   @override
@@ -544,10 +577,31 @@ class _RecentReservationCard extends StatelessWidget {
               width: 44,
               height: 44,
               decoration: BoxDecoration(
-                color: const Color(0xFFEAF5FF),
+                color: coverColor ?? const Color(0xFFEAF5FF),
                 borderRadius: BorderRadius.circular(12),
               ),
-              child: Icon(icon, color: _DashboardColors.primary, size: 22),
+              child: coverImageUrl != null && coverImageUrl!.isNotEmpty
+                  ? ClipRRect(
+                      borderRadius: BorderRadius.circular(12),
+                      child: Image.network(
+                        coverImageUrl!,
+                        width: 44,
+                        height: 44,
+                        fit: BoxFit.cover,
+                        errorBuilder: (context, error, stackTrace) {
+                          return Icon(
+                            Icons.menu_book_outlined,
+                            color: _DashboardColors.primary,
+                            size: 22,
+                          );
+                        },
+                      ),
+                    )
+                  : Icon(
+                      Icons.menu_book_outlined,
+                      color: _DashboardColors.primary,
+                      size: 22,
+                    ),
             ),
             const SizedBox(width: 12),
             Expanded(
@@ -607,20 +661,22 @@ class _RecentReservationCard extends StatelessWidget {
 
 class _TrendingBookCard extends StatelessWidget {
   const _TrendingBookCard({
+    required this.bookId,
     required this.title,
     required this.author,
     required this.status,
     required this.statusColor,
     required this.coverColor,
-    required this.coverIcon,
+    this.coverImageUrl,
   });
 
+  final String bookId;
   final String title;
   final String author;
   final String status;
   final Color statusColor;
   final Color coverColor;
-  final IconData coverIcon;
+  final String? coverImageUrl;
 
   @override
   Widget build(BuildContext context) {
@@ -640,11 +696,28 @@ class _TrendingBookCard extends StatelessWidget {
               color: coverColor,
               borderRadius: BorderRadius.circular(8),
             ),
-            child: Icon(
-              coverIcon,
-              color: Colors.white.withValues(alpha: .85),
-              size: 25,
-            ),
+            child: coverImageUrl != null && coverImageUrl!.isNotEmpty
+                ? ClipRRect(
+                    borderRadius: BorderRadius.circular(8),
+                    child: Image.network(
+                      coverImageUrl!,
+                      width: 54,
+                      height: 70,
+                      fit: BoxFit.cover,
+                      errorBuilder: (context, error, stackTrace) {
+                        return Icon(
+                          Icons.menu_book,
+                          color: Colors.white.withValues(alpha: .85),
+                          size: 25,
+                        );
+                      },
+                    ),
+                  )
+                : Icon(
+                    Icons.menu_book,
+                    color: Colors.white.withValues(alpha: .85),
+                    size: 25,
+                  ),
           ),
           const SizedBox(width: 13),
           Expanded(
@@ -676,9 +749,18 @@ class _TrendingBookCard extends StatelessWidget {
               ],
             ),
           ),
-          const Icon(
-            Icons.chevron_right_rounded,
-            color: _DashboardColors.muted,
+          GestureDetector(
+            onTap: () {
+              Navigator.pushNamed(
+                context,
+                AppRoutes.bookDetail,
+                arguments: bookId,
+              );
+            },
+            child: const Icon(
+              Icons.chevron_right_rounded,
+              color: _DashboardColors.muted,
+            ),
           ),
         ],
       ),
@@ -743,22 +825,38 @@ class _RecentHolds extends StatelessWidget {
 
         final recentHolds = holds.take(2).toList();
 
-        return Column(
-          children: recentHolds.map((hold) {
-            return Padding(
-              padding: const EdgeInsets.only(bottom: 10),
-              child: _RecentReservationCard(
-                category: 'BOOK HOLD',
-                status: hold.holdStatus.name.toUpperCase(),
-                title: 'Book #${hold.bookId}',
-                subtitle: 'Queue position: ${hold.queuePosition}',
-                time: 'Created: ${_formatDate(hold.createdAt)}',
-                icon: Icons.menu_book_outlined,
-                statusColor: _getStatusColor(hold.holdStatus),
-                onTap: () => Navigator.pushNamed(context, AppRoutes.holds),
-              ),
+        return FutureBuilder<List<Book?>>(
+          future: Future.wait(
+            recentHolds.map((hold) => firestoreService.getBookById(hold.bookId)),
+          ),
+          builder: (context, booksSnapshot) {
+            if (booksSnapshot.connectionState == ConnectionState.waiting) {
+              return const Center(child: CircularProgressIndicator());
+            }
+
+            final books = booksSnapshot.data ?? [];
+
+            return Column(
+              children: List.generate(recentHolds.length, (index) {
+                final hold = recentHolds[index];
+                final book = books[index];
+                return Padding(
+                  padding: const EdgeInsets.only(bottom: 10),
+                  child: _RecentReservationCard(
+                    category: 'BOOK HOLD',
+                    status: hold.holdStatus.name.toUpperCase(),
+                    title: book?.title ?? 'Book #${hold.bookId}',
+                    subtitle: book?.author ?? 'Queue position: ${hold.queuePosition}',
+                    time: 'Created: ${_formatDate(hold.createdAt)}',
+                    statusColor: _getStatusColor(hold.holdStatus),
+                    coverImageUrl: book?.coverImageUrl,
+                    coverColor: book?.coverColor,
+                    onTap: () => Navigator.pushNamed(context, AppRoutes.holds),
+                  ),
+                );
+              }),
             );
-          }).toList(),
+          },
         );
       },
     );
@@ -770,8 +868,6 @@ class _RecentHolds extends StatelessWidget {
         return _DashboardColors.orange;
       case HoldStatus.ready:
         return _DashboardColors.green;
-      case HoldStatus.expired:
-        return _DashboardColors.red;
       case HoldStatus.cancelled:
         return _DashboardColors.muted;
     }
@@ -816,6 +912,7 @@ class _TrendingBooks extends StatelessWidget {
             return Padding(
               padding: const EdgeInsets.only(bottom: 10),
               child: _TrendingBookCard(
+                bookId: book.id,
                 title: book.title,
                 author: '${book.author}  •  ${book.genre}',
                 status: book.availableCopies > 0 ? 'Available' : 'On Loan',
@@ -823,7 +920,7 @@ class _TrendingBooks extends StatelessWidget {
                     ? _DashboardColors.green
                     : _DashboardColors.red,
                 coverColor: book.coverColor,
-                coverIcon: Icons.menu_book,
+                coverImageUrl: book.coverImageUrl,
               ),
             );
           }).toList(),

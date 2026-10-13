@@ -5,6 +5,7 @@ import 'package:read_space/services/firestore_service.dart';
 import 'package:read_space/models/book.dart';
 import 'package:read_space/models/seat.dart';
 import 'package:read_space/models/booking.dart';
+import 'package:read_space/widgets/library_bottom_navigation.dart';
 
 class LibrarianInventoryScreen extends StatefulWidget {
   const LibrarianInventoryScreen({super.key});
@@ -17,6 +18,16 @@ class _LibrarianInventoryScreenState extends State<LibrarianInventoryScreen> {
   int _currentIndex = 1;
   int _selectedTab = 0; // 0 = Books, 1 = Desks
   final FirestoreService _firestoreService = FirestoreService();
+
+  void _handleNavigation(int index) {
+    if (index == 0) {
+      Navigator.pushNamed(context, AppRoutes.librarianDashboard);
+    } else if (index == 2) {
+      Navigator.pushNamed(context, AppRoutes.librarianAnalytics);
+    } else if (index == 3) {
+      Navigator.pushNamed(context, AppRoutes.librarianProfile);
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -41,7 +52,10 @@ class _LibrarianInventoryScreenState extends State<LibrarianInventoryScreen> {
                 ),
               ),
             ),
-            _buildBottomNavigation(),
+            LibraryBottomNavigation(
+              selectedIndex: _currentIndex,
+              onSelected: _handleNavigation,
+            ),
           ],
         ),
       ),
@@ -290,11 +304,26 @@ class _LibrarianInventoryScreenState extends State<LibrarianInventoryScreen> {
               color: book.coverColor.withValues(alpha: 0.2),
               borderRadius: BorderRadius.circular(6),
             ),
-            child: Icon(
-              Icons.menu_book,
-              color: book.coverColor,
-              size: 24,
-            ),
+            child: book.coverImageUrl != null && book.coverImageUrl!.isNotEmpty
+                ? ClipRRect(
+                    borderRadius: BorderRadius.circular(6),
+                    child: Image.network(
+                      book.coverImageUrl!,
+                      fit: BoxFit.cover,
+                      errorBuilder: (context, error, stackTrace) {
+                        return Icon(
+                          Icons.menu_book,
+                          color: book.coverColor,
+                          size: 24,
+                        );
+                      },
+                    ),
+                  )
+                : Icon(
+                    Icons.menu_book,
+                    color: book.coverColor,
+                    size: 24,
+                  ),
           ),
           const SizedBox(width: 12),
           Expanded(
@@ -332,26 +361,237 @@ class _LibrarianInventoryScreenState extends State<LibrarianInventoryScreen> {
               ],
             ),
           ),
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-            decoration: BoxDecoration(
-              color: book.availableCopies > 0
-                  ? AppTheme.success.withValues(alpha: 0.1)
-                  : AppTheme.red.withValues(alpha: 0.1),
-              borderRadius: BorderRadius.circular(8),
-            ),
-            child: Text(
-              book.availableCopies > 0 ? 'Available' : 'Unavailable',
-              style: GoogleFonts.poppins(
-                fontSize: 10,
-                fontWeight: FontWeight.w600,
-                color: book.availableCopies > 0 ? AppTheme.success : AppTheme.red,
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.end,
+            children: [
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                decoration: BoxDecoration(
+                  color: book.availableCopies > 0
+                      ? AppTheme.success.withValues(alpha: 0.1)
+                      : AppTheme.red.withValues(alpha: 0.1),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Text(
+                  book.availableCopies > 0 ? 'Available' : 'Unavailable',
+                  style: GoogleFonts.poppins(
+                    fontSize: 10,
+                    fontWeight: FontWeight.w600,
+                    color: book.availableCopies > 0 ? AppTheme.success : AppTheme.red,
+                  ),
+                ),
               ),
-            ),
+              const SizedBox(height: 8),
+              Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  if (book.availableCopies < book.totalCopies)
+                    GestureDetector(
+                      onTap: () => _checkInBook(book),
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                        decoration: BoxDecoration(
+                          color: AppTheme.primaryBlue.withValues(alpha: 0.1),
+                          borderRadius: BorderRadius.circular(6),
+                        ),
+                        child: Text(
+                          'Check In',
+                          style: GoogleFonts.poppins(
+                            fontSize: 11,
+                            fontWeight: FontWeight.w600,
+                            color: AppTheme.primaryBlue,
+                          ),
+                        ),
+                      ),
+                    ),
+                  const SizedBox(width: 4),
+                  GestureDetector(
+                    onTap: () => _editBook(book),
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                      decoration: BoxDecoration(
+                        color: Colors.orange.withValues(alpha: 0.1),
+                        borderRadius: BorderRadius.circular(6),
+                      ),
+                      child: Text(
+                        'Edit',
+                        style: GoogleFonts.poppins(
+                          fontSize: 11,
+                          fontWeight: FontWeight.w600,
+                          color: Colors.orange,
+                        ),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 4),
+                  GestureDetector(
+                    onTap: () => _deleteBook(book),
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                      decoration: BoxDecoration(
+                        color: AppTheme.red.withValues(alpha: 0.1),
+                        borderRadius: BorderRadius.circular(6),
+                      ),
+                      child: Text(
+                        'Delete',
+                        style: GoogleFonts.poppins(
+                          fontSize: 11,
+                          fontWeight: FontWeight.w600,
+                          color: AppTheme.red,
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ],
           ),
         ],
       ),
     );
+  }
+
+  Future<void> _checkInBook(Book book) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: const Text('Check In Book'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(book.title,
+                style: GoogleFonts.poppins(
+                    fontWeight: FontWeight.w600, fontSize: 15)),
+            const SizedBox(height: 4),
+            Text('by ${book.author}',
+                style: GoogleFonts.poppins(
+                    fontSize: 13, color: AppTheme.secondaryText)),
+            const SizedBox(height: 12),
+            Text(
+              'This will mark the book as returned and update any pending holds.',
+              style: GoogleFonts.poppins(
+                  fontSize: 12, color: AppTheme.secondaryText),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.pop(ctx, false),
+              child: const Text('Cancel')),
+          ElevatedButton(
+              onPressed: () => Navigator.pop(ctx, true),
+              child: const Text('Check In')),
+        ],
+      ),
+    );
+
+    if (confirmed != true) return;
+
+    try {
+      await _firestoreService.processBookReturn(book.id);
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Book checked in successfully'),
+          backgroundColor: AppTheme.success,
+          duration: const Duration(seconds: 2),
+        ),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Failed to check in book: $e'),
+          backgroundColor: AppTheme.red,
+          duration: const Duration(seconds: 3),
+        ),
+      );
+    }
+  }
+
+  Future<void> _editBook(Book book) async {
+    // Navigate to add book screen with book data for editing
+    final result = await Navigator.pushNamed(
+      context,
+      AppRoutes.librarianAddBook,
+      arguments: book,
+    );
+    
+    if (result == true && mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Book updated successfully'),
+          backgroundColor: AppTheme.success,
+          duration: const Duration(seconds: 2),
+        ),
+      );
+    }
+  }
+
+  Future<void> _deleteBook(Book book) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: const Text('Delete Book'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(book.title,
+                style: GoogleFonts.poppins(
+                    fontWeight: FontWeight.w600, fontSize: 15)),
+            const SizedBox(height: 4),
+            Text('by ${book.author}',
+                style: GoogleFonts.poppins(
+                    fontSize: 13, color: AppTheme.secondaryText)),
+            const SizedBox(height: 12),
+            Text(
+              'This action cannot be undone. Are you sure you want to delete this book?',
+              style: GoogleFonts.poppins(
+                  fontSize: 12, color: AppTheme.secondaryText),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.pop(ctx, false),
+              child: const Text('Cancel')),
+          ElevatedButton(
+              onPressed: () => Navigator.pop(ctx, true),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: AppTheme.red,
+                foregroundColor: Colors.white,
+              ),
+              child: const Text('Delete')),
+        ],
+      ),
+    );
+
+    if (confirmed != true) return;
+
+    try {
+      await _firestoreService.deleteBook(book.id);
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Book deleted successfully'),
+          backgroundColor: AppTheme.success,
+          duration: const Duration(seconds: 2),
+        ),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Failed to delete book: $e'),
+          backgroundColor: AppTheme.red,
+          duration: const Duration(seconds: 3),
+        ),
+      );
+    }
   }
 
   Widget _buildDesksTab() {

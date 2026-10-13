@@ -23,6 +23,48 @@ class _HoldsScreenState extends State<HoldsScreen> {
     _currentUserId = FirebaseAuth.instance.currentUser?.uid;
   }
 
+  Future<void> _cancelHold(Hold hold) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: const Text('Cancel Hold'),
+        content: const Text('Are you sure you want to cancel this hold?'),
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.pop(ctx, false),
+              child: const Text('No')),
+          ElevatedButton(
+              onPressed: () => Navigator.pop(ctx, true),
+              child: const Text('Yes, Cancel')),
+        ],
+      ),
+    );
+
+    if (confirmed != true) return;
+
+    try {
+      await _firestoreService.cancelHold(hold.id);
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Hold cancelled successfully'),
+          backgroundColor: AppTheme.success,
+          duration: Duration(seconds: 2),
+        ),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Failed to cancel hold: $e'),
+          backgroundColor: AppTheme.red,
+          duration: const Duration(seconds: 3),
+        ),
+      );
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     if (_currentUserId == null) {
@@ -144,7 +186,11 @@ class _HoldsScreenState extends State<HoldsScreen> {
                     (b) => b.id == hold.bookId,
                     orElse: () => _createPlaceholderBook(),
                   );
-                  return _HoldCard(hold: hold, book: book);
+                  return _HoldCard(
+                    hold: hold,
+                    book: book,
+                    onCancel: () => _cancelHold(hold),
+                  );
                 },
               );
             },
@@ -190,9 +236,10 @@ class _HoldsScreenState extends State<HoldsScreen> {
 }
 
 class _HoldCard extends StatelessWidget {
-  const _HoldCard({required this.hold, required this.book});
+  const _HoldCard({required this.hold, required this.book, required this.onCancel});
   final Hold hold;
   final Book book;
+  final VoidCallback onCancel;
 
   @override
   Widget build(BuildContext context) {
@@ -203,9 +250,6 @@ class _HoldCard extends StatelessWidget {
         break;
       case HoldStatus.ready:
         statusColor = AppTheme.success;
-        break;
-      case HoldStatus.expired:
-        statusColor = AppTheme.red;
         break;
       case HoldStatus.cancelled:
         statusColor = AppTheme.secondaryText;
@@ -219,9 +263,6 @@ class _HoldCard extends StatelessWidget {
         break;
       case HoldStatus.ready:
         statusLabel = 'Ready for Pickup';
-        break;
-      case HoldStatus.expired:
-        statusLabel = 'Expired';
         break;
       case HoldStatus.cancelled:
         statusLabel = 'Cancelled';
@@ -297,6 +338,14 @@ class _HoldCard extends StatelessWidget {
                 ],
               ),
             ),
+            if (hold.holdStatus == HoldStatus.pending ||
+                hold.holdStatus == HoldStatus.ready)
+              IconButton(
+                icon: const Icon(Icons.close, size: 20),
+                onPressed: onCancel,
+                color: AppTheme.secondaryText,
+                tooltip: 'Cancel Hold',
+              ),
           ],
         ),
       ),

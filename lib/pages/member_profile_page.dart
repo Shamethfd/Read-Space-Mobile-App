@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
+import 'package:google_fonts/google_fonts.dart';
 import 'package:qr_flutter/qr_flutter.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 
 import '../main.dart' show AppTheme, AppRoutes;
 import '../widgets/library_bottom_navigation.dart';
@@ -180,27 +182,24 @@ class _MemberProfilePageState extends State<MemberProfilePage> {
 
       if (userData != null) {
         print('User data keys: ${userData.keys.toList()}');
-      }
-
-      final outstandingFines = await _paymentService.getOutstandingFines(
-        user.uid,
-      );
-      print('Outstanding fines: $outstandingFines');
-
-      if (!mounted) return;
-
-      if (userData != null) {
-        final userProfile = UserProfile.fromJson(userData);
+        final outstandingFines = await _paymentService.getOutstandingFines(user.uid);
+        print('Outstanding fines: $outstandingFines');
         setState(() {
-          _member = MemberProfileData.fromUserProfile(
-            userProfile,
-            outstandingFines,
+          _member = MemberProfileData(
+            fullName: userData['fullName'] as String? ?? '',
+            memberId: userData['studentId'] as String? ?? userData['memberId'] as String? ?? '',
+            profileImageUrl: userData['profileImageUrl'] as String?,
+            phoneNumber: userData['phoneNumber'] as String? ?? '',
+            universityEmail: userData['universityEmail'] as String? ?? '',
+            facultyDepartment: userData['facultyDepartment'] as String? ?? '',
+            outstandingFines: outstandingFines,
           );
           _loading = false;
         });
         print('Profile loaded successfully');
       } else {
         print('User document not found in Firestore, using Firebase Auth data');
+        final outstandingFines = await _paymentService.getOutstandingFines(user.uid);
         setState(() {
           _member = MemberProfileData(
             fullName: user.displayName ?? user.email?.split('@')[0] ?? 'User',
@@ -268,10 +267,17 @@ class _MemberProfilePageState extends State<MemberProfilePage> {
             ? const Center(child: CircularProgressIndicator())
             : _ProfileContent(
                 member: _member ?? const MemberProfileData.empty(),
-                onEditProfile: () => Navigator.of(context).pushNamed(
-                  AppRoutes.editProfile,
-                  arguments: _member ?? const MemberProfileData.empty(),
-                ),
+                onEditProfile: () async {
+                  final result = await Navigator.of(context).pushNamed(
+                    AppRoutes.editProfile,
+                    arguments: _member ?? const MemberProfileData.empty(),
+                  );
+                  if (result is MemberProfileData && mounted) {
+                    setState(() {
+                      _member = result;
+                    });
+                  }
+                },
                 onPayOnline: () {
                   if (widget.onPayOnline != null) {
                     widget.onPayOnline!();
@@ -309,22 +315,166 @@ class _ProfileContent extends StatelessWidget {
         member.fullName.trim().isNotEmpty || member.memberId.trim().isNotEmpty;
 
     return ListView(
-      padding: const EdgeInsets.fromLTRB(20, 10, 20, 24),
+      padding: const EdgeInsets.all(16),
       children: [
-        _MemberCard(member: member, hasMember: hasMember, onTap: onEditProfile),
+        // Profile Card
+        Container(
+          padding: const EdgeInsets.all(20),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(16),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withValues(alpha: 0.05),
+                blurRadius: 10,
+                offset: const Offset(0, 2),
+              ),
+            ],
+          ),
+          child: Column(
+            children: [
+              Row(
+                children: [
+                  _ProfileAvatar(imageUrl: member.profileImageUrl),
+                  const SizedBox(width: 16),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          member.fullName.isNotEmpty
+                              ? member.fullName
+                              : member.universityEmail.isNotEmpty
+                                  ? member.universityEmail.split('@')[0]
+                                  : 'Member',
+                          style: GoogleFonts.poppins(
+                            fontSize: 18,
+                            fontWeight: FontWeight.w700,
+                            color: AppTheme.textPrimary,
+                          ),
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          member.memberId.isNotEmpty
+                              ? member.memberId
+                              : 'ID: ${FirebaseAuth.instance.currentUser?.uid.substring(0, 8) ?? 'N/A'}',
+                          style: GoogleFonts.poppins(
+                            fontSize: 13,
+                            color: AppTheme.secondaryText,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  IconButton(
+                    onPressed: onEditProfile,
+                    icon: const Icon(Icons.edit_outlined),
+                    color: AppTheme.primaryBlue,
+                  ),
+                ],
+              ),
+              const SizedBox(height: 20),
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  _QrCode(memberId: member.memberId),
+                  const SizedBox(width: 16),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'Digital Library Card',
+                          style: GoogleFonts.poppins(
+                            fontSize: 14,
+                            fontWeight: FontWeight.w600,
+                            color: AppTheme.textPrimary,
+                          ),
+                        ),
+                        const SizedBox(height: 6),
+                        Text(
+                          'Present this QR code at the desk or scanner to borrow books.',
+                          style: GoogleFonts.poppins(
+                            fontSize: 12,
+                            color: AppTheme.secondaryText,
+                            height: 1.4,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
         const SizedBox(height: 16),
+        
+        // Fines Card
         _FinesCard(balance: member.outstandingFines, onPayOnline: onPayOnline),
         const SizedBox(height: 16),
+        
+        // Appeals Card
         _AppealsCard(),
-        const SizedBox(height: 26),
-        _SectionHeader(
-          title: 'Borrowing History',
-          action: 'See All',
-          onPressed: member.borrowingHistory.isEmpty ? null : onSeeAllHistory,
+        const SizedBox(height: 16),
+        
+        // Ready for Pickup Card
+        _ReadyForPickupCard(userId: FirebaseAuth.instance.currentUser?.uid),
+        const SizedBox(height: 20),
+        
+        // Borrowing History Section
+        Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            Text(
+              'Borrowing History',
+              style: GoogleFonts.poppins(
+                fontSize: 16,
+                fontWeight: FontWeight.w600,
+                color: AppTheme.textPrimary,
+              ),
+            ),
+            if (member.borrowingHistory.isNotEmpty)
+              TextButton(
+                onPressed: onSeeAllHistory,
+                child: Text(
+                  'See All',
+                  style: GoogleFonts.poppins(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w500,
+                    color: AppTheme.primaryBlue,
+                  ),
+                ),
+              ),
+          ],
         ),
         const SizedBox(height: 12),
         if (member.borrowingHistory.isEmpty)
-          const _EmptyHistoryState()
+          Container(
+            padding: const EdgeInsets.all(32),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(color: AppTheme.border),
+            ),
+            child: Column(
+              children: [
+                Icon(
+                  Icons.menu_book_outlined,
+                  size: 48,
+                  color: AppTheme.secondaryText.withValues(alpha: 0.5),
+                ),
+                const SizedBox(height: 12),
+                Text(
+                  'No borrowing history',
+                  style: GoogleFonts.poppins(
+                    fontSize: 14,
+                    color: AppTheme.secondaryText,
+                  ),
+                ),
+              ],
+            ),
+          )
         else
           for (final book in member.borrowingHistory) ...[
             _BorrowedBookCard(book: book),
@@ -349,12 +499,14 @@ class _MemberCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final name = hasMember && member.fullName.isNotEmpty
+    final name = member.fullName.isNotEmpty
         ? member.fullName
-        : 'Member details unavailable';
+        : member.universityEmail.isNotEmpty
+            ? member.universityEmail.split('@')[0]
+            : 'Member';
     final id = member.memberId.isNotEmpty
         ? member.memberId
-        : 'Member ID not available';
+        : 'ID: ${FirebaseAuth.instance.currentUser?.uid.substring(0, 8) ?? 'N/A'}';
 
     return Semantics(
       button: true,
@@ -800,6 +952,141 @@ class _EmptyHistoryState extends StatelessWidget {
         ],
       ),
     );
+  }
+}
+
+class _ReadyForPickupCard extends StatelessWidget {
+  const _ReadyForPickupCard({required this.userId});
+
+  final String? userId;
+
+  @override
+  Widget build(BuildContext context) {
+    if (userId == null) {
+      return const SizedBox();
+    }
+
+    return StreamBuilder<QuerySnapshot>(
+      stream: FirebaseFirestore.instance
+          .collection('holds')
+          .where('userId', isEqualTo: userId)
+          .where('status', isEqualTo: 'ready_for_pickup')
+          .snapshots(),
+      builder: (context, snapshot) {
+        final holds = snapshot.data?.docs ?? [];
+
+        if (holds.isEmpty) {
+          return const SizedBox();
+        }
+
+        return _SurfaceCard(
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Icon(
+                    Icons.notifications_active,
+                    color: AppTheme.orange,
+                    size: 20,
+                  ),
+                  const SizedBox(width: 8),
+                  Text(
+                    'Ready for Pickup',
+                    style: GoogleFonts.poppins(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w600,
+                      color: AppTheme.textPrimary,
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 12),
+              ...holds.map((doc) {
+                final data = doc.data() as Map<String, dynamic>;
+                final bookTitle = data['bookTitle'] as String? ?? 'Unknown Book';
+                final readyForPickupAt = data['readyForPickupAt'] as String?;
+                
+                return Container(
+                  margin: const EdgeInsets.only(bottom: 8),
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: AppTheme.orange.withValues(alpha: 0.05),
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(color: AppTheme.orange.withValues(alpha: 0.2)),
+                  ),
+                  child: Row(
+                    children: [
+                      Icon(
+                        Icons.menu_book,
+                        color: AppTheme.orange,
+                        size: 18,
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              bookTitle,
+                              style: GoogleFonts.poppins(
+                                fontSize: 12,
+                                fontWeight: FontWeight.w600,
+                                color: AppTheme.textPrimary,
+                              ),
+                            ),
+                            const SizedBox(height: 2),
+                            Text(
+                              'Pick up within 7 days',
+                              style: GoogleFonts.poppins(
+                                fontSize: 10,
+                                color: AppTheme.secondaryText,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      if (readyForPickupAt != null)
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                          decoration: BoxDecoration(
+                            color: AppTheme.orange.withValues(alpha: 0.15),
+                            borderRadius: BorderRadius.circular(4),
+                          ),
+                          child: Text(
+                            _getDaysRemaining(readyForPickupAt),
+                            style: GoogleFonts.poppins(
+                              fontSize: 10,
+                              fontWeight: FontWeight.w700,
+                              color: AppTheme.orange,
+                            ),
+                          ),
+                        ),
+                    ],
+                  ),
+                );
+              }).toList(),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  String _getDaysRemaining(String readyForPickupAt) {
+    try {
+      final readyDate = DateTime.parse(readyForPickupAt);
+      final now = DateTime.now();
+      final difference = readyDate.difference(now);
+      final days = difference.inDays;
+      
+      if (days <= 0) return ''; // Don't show expired text
+      if (days == 1) return '1 day';
+      return '$days days';
+    } catch (e) {
+      return '';
+    }
   }
 }
 

@@ -3,6 +3,7 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:read_space/main.dart';
 import 'package:read_space/models/book.dart';
 import 'package:read_space/services/firestore_service.dart';
+import 'package:read_space/widgets/library_bottom_navigation.dart';
 
 class CatalogueScreen extends StatefulWidget {
   const CatalogueScreen({super.key, this.query = '', this.onlyAvailable = false, this.genre = 'All', this.section});
@@ -273,19 +274,17 @@ class _CatalogueScreenState extends State<CatalogueScreen> {
             const SizedBox(height: 6),
 
             // ── Results count ────────────────────────────────────────────
-            StreamBuilder<List<Book>>(
-              stream: _firestoreService.getBooksStream(),
-              builder: (context, snapshot) {
-                if (snapshot.connectionState == ConnectionState.waiting) {
-                  return const Expanded(
-                    child: Center(child: CircularProgressIndicator()),
-                  );
-                }
+            Expanded(
+              child: StreamBuilder<List<Book>>(
+                stream: _firestoreService.getBooksStream(),
+                builder: (context, snapshot) {
+                  if (snapshot.connectionState == ConnectionState.waiting) {
+                    return const Center(child: CircularProgressIndicator());
+                  }
 
-                if (snapshot.hasError) {
-                  print('❌ Error loading books: ${snapshot.error}');
-                  return Expanded(
-                    child: Center(
+                  if (snapshot.hasError) {
+                    print('❌ Error loading books: ${snapshot.error}');
+                    return Center(
                       child: Column(
                         mainAxisAlignment: MainAxisAlignment.center,
                         children: [
@@ -297,79 +296,83 @@ class _CatalogueScreenState extends State<CatalogueScreen> {
                           ),
                         ],
                       ),
-                    ),
-                  );
-                }
+                    );
+                  }
 
-                final allBooks = snapshot.data ?? [];
-                print('📚 Total books from Firestore: ${allBooks.length}');
-                final books = _filtered(allBooks);
-                print('📚 Filtered books: ${books.length}');
+                  final allBooks = snapshot.data ?? [];
+                  final filtered = _filtered(allBooks);
 
-                return Expanded(
-                  child: Column(
+                  return Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Padding(
-                        padding: const EdgeInsets.fromLTRB(16, 4, 16, 4),
-                        child: Row(
-                          children: [
-                            Text(
-                              'Search Results',
-                              style: GoogleFonts.inter(
-                                fontSize: 24,
-                                fontWeight: FontWeight.w800,
-                                color: AppTheme.textPrimary,
-                              ),
-                            ),
-                            const Spacer(),
-                            Text(
-                              'Showing ${books.length} book${books.length == 1 ? '' : 's'}',
-                              style: GoogleFonts.inter(
-                                  fontSize: 11, color: AppTheme.secondaryText),
-                            ),
-                          ],
+                        padding: const EdgeInsets.fromLTRB(16, 8, 16, 4),
+                        child: Text(
+                          '${filtered.length} results',
+                          style: GoogleFonts.inter(
+                            fontSize: 12,
+                            fontWeight: FontWeight.w600,
+                            color: AppTheme.secondaryText,
+                          ),
                         ),
                       ),
-                      const SizedBox(height: 2),
-
-                      // ── Book list ────────────────────────────────────────────────
-                      Expanded(
-                        child: Builder(
-                          builder: (context) {
-                            if (books.isEmpty) {
-                              return _EmptyState(
-                                query: _searchCtrl.text,
-                                chip: _activeChip,
-                                onClear: () => setState(() {
-                                  _searchCtrl.clear();
-                                  _activeChip = 'All';
-                                }),
+                      if (filtered.isEmpty)
+                        Expanded(
+                          child: _EmptyState(
+                            query: _searchCtrl.text,
+                            chip: _activeChip,
+                            onClear: () {
+                              setState(() {
+                                _searchCtrl.clear();
+                                _activeChip = 'All';
+                              });
+                            },
+                          ),
+                        )
+                      else
+                        Expanded(
+                          child: ListView.separated(
+                            padding: const EdgeInsets.fromLTRB(16, 4, 16, 16),
+                            itemCount: filtered.length,
+                            separatorBuilder: (_, __) => const SizedBox(height: 10),
+                            itemBuilder: (context, index) {
+                              final book = filtered[index];
+                              return _BookCard(
+                                book: book,
+                                onView: () {
+                                  Navigator.pushNamed(
+                                    context,
+                                    AppRoutes.bookDetail,
+                                    arguments: book.id,
+                                  );
+                                },
                               );
-                            }
-
-                            return ListView.builder(
-                              key: const PageStorageKey<String>('catalogue_book_list'),
-                              padding: const EdgeInsets.fromLTRB(12, 6, 12, 24),
-                              itemCount: books.length,
-                              itemBuilder: (context, i) => _BookCard(
-                                book: books[i],
-                                onView: () => Navigator.pushNamed(
-                                  context,
-                                  AppRoutes.bookDetail,
-                                  arguments: books[i].id,
-                                ),
-                              ),
-                            );
-                          },
+                            },
+                          ),
                         ),
-                      ),
                     ],
-                  ),
-                );
-              },
+                  );
+                },
+              ),
             ),
           ],
         ),
+      ),
+      bottomNavigationBar: LibraryBottomNavigation(
+        selectedIndex: 1,
+        onSelected: (index) {
+          if (index == 0) {
+            Navigator.pushNamedAndRemoveUntil(
+              context,
+              AppRoutes.dashboard,
+              (route) => false,
+            );
+          } else if (index == 2) {
+            Navigator.pushNamed(context, AppRoutes.myReservations);
+          } else if (index == 3) {
+            Navigator.pushNamed(context, AppRoutes.profile);
+          }
+        },
       ),
     );
   }
@@ -393,7 +396,7 @@ class _BookCard extends StatelessWidget {
           child: Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // Cover image (color swatch)
+              // Cover image (color swatch or uploaded image)
               Container(
                 width: 56,
                 height: 76,
@@ -401,26 +404,18 @@ class _BookCard extends StatelessWidget {
                   color: book.coverColor,
                   borderRadius: BorderRadius.circular(8),
                 ),
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    const Icon(Icons.menu_book_rounded,
-                        color: Colors.white38, size: 24),
-                    const SizedBox(height: 4),
-                    Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 4),
-                      child: Text(
-                        book.genre == 'Technology' ? 'READSPACE' : book.genre.toUpperCase(),
-                        textAlign: TextAlign.center,
-                        style: GoogleFonts.inter(
-                            fontSize: 7,
-                            color: Colors.white54,
-                            fontWeight: FontWeight.w600,
-                            letterSpacing: 0.5),
-                      ),
-                    ),
-                  ],
-                ),
+                child: book.coverImageUrl != null && book.coverImageUrl!.isNotEmpty
+                    ? ClipRRect(
+                        borderRadius: BorderRadius.circular(8),
+                        child: Image.network(
+                          book.coverImageUrl!,
+                          fit: BoxFit.cover,
+                          errorBuilder: (context, error, stackTrace) {
+                            return _buildPlaceholder(book);
+                          },
+                        ),
+                      )
+                    : _buildPlaceholder(book),
               ),
               const SizedBox(width: 12),
               // Text content
@@ -485,6 +480,29 @@ class _BookCard extends StatelessWidget {
           ),
         ),
       ),
+    );
+  }
+
+  Widget _buildPlaceholder(Book book) {
+    return Column(
+      mainAxisAlignment: MainAxisAlignment.center,
+      children: [
+        const Icon(Icons.menu_book_rounded,
+            color: Colors.white38, size: 24),
+        const SizedBox(height: 4),
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 4),
+          child: Text(
+            book.genre == 'Technology' ? 'READSPACE' : book.genre.toUpperCase(),
+            textAlign: TextAlign.center,
+            style: GoogleFonts.inter(
+                fontSize: 7,
+                color: Colors.white54,
+                fontWeight: FontWeight.w600,
+                letterSpacing: 0.5),
+          ),
+        ),
+      ],
     );
   }
 }

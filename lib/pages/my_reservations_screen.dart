@@ -482,8 +482,6 @@ class _BookHoldCardState extends State<_BookHoldCard> {
         return 'ON HOLD';
       case HoldStatus.ready:
         return 'READY FOR PICKUP';
-      case HoldStatus.expired:
-        return 'EXPIRED';
       case HoldStatus.cancelled:
         return 'CANCELLED';
     }
@@ -495,8 +493,6 @@ class _BookHoldCardState extends State<_BookHoldCard> {
         return const Color(0xFFF59E0B);
       case HoldStatus.ready:
         return const Color(0xFF16A34A);
-      case HoldStatus.expired:
-        return const Color(0xFFFF3B30);
       case HoldStatus.cancelled:
         return const Color(0xFF8A929D);
     }
@@ -506,8 +502,49 @@ class _BookHoldCardState extends State<_BookHoldCard> {
     return '${date.day}/${date.month}/${date.year}';
   }
 
+  String _getDaysRemaining(DateTime? readyAt) {
+    if (readyAt == null) return '';
+    try {
+      final now = DateTime.now();
+      final difference = readyAt.difference(now);
+      final days = difference.inDays;
+      
+      if (days <= 0) return ''; // Don't show expired text
+      if (days == 1) return '1d';
+      return '${days}d';
+    } catch (e) {
+      return '';
+    }
+  }
+
+  Future<void> _removeHold() async {
+    try {
+      await _firestoreService.cancelHold(widget.hold.id);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Hold removed successfully'),
+            backgroundColor: Colors.green,
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Failed to remove hold'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
+    final readyAt = widget.hold.readyAt;
+    final daysRemaining = _getDaysRemaining(readyAt);
+    
     return InkWell(
       onTap: () {
         if (_book != null) {
@@ -535,11 +572,28 @@ class _BookHoldCardState extends State<_BookHoldCard> {
                 color: _book?.coverColor ?? const Color(0xFFE7F2FF),
                 borderRadius: BorderRadius.circular(8),
               ),
-              child: const Icon(
-                Icons.menu_book_rounded,
-                color: Color(0xFF087BFA),
-                size: 24,
-              ),
+              child: _book?.coverImageUrl != null && _book!.coverImageUrl!.isNotEmpty
+                  ? ClipRRect(
+                      borderRadius: BorderRadius.circular(8),
+                      child: Image.network(
+                        _book!.coverImageUrl!,
+                        width: 48,
+                        height: 64,
+                        fit: BoxFit.cover,
+                        errorBuilder: (context, error, stackTrace) {
+                          return const Icon(
+                            Icons.menu_book_rounded,
+                            color: Color(0xFF087BFA),
+                            size: 24,
+                          );
+                        },
+                      ),
+                    )
+                  : const Icon(
+                      Icons.menu_book_rounded,
+                      color: Color(0xFF087BFA),
+                      size: 24,
+                    ),
             ),
             const SizedBox(width: 12),
             Expanded(
@@ -563,20 +617,53 @@ class _BookHoldCardState extends State<_BookHoldCard> {
                     ),
                   ),
                   const SizedBox(height: 6),
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                    decoration: BoxDecoration(
-                      color: _statusColor.withValues(alpha: 0.1),
-                      borderRadius: BorderRadius.circular(4),
-                    ),
-                    child: Text(
-                      _statusLabel,
-                      style: GoogleFonts.inter(
-                        fontSize: 10,
-                        fontWeight: FontWeight.w600,
-                        color: _statusColor,
+                  Row(
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                        decoration: BoxDecoration(
+                          color: _statusColor.withValues(alpha: 0.1),
+                          borderRadius: BorderRadius.circular(4),
+                        ),
+                        child: Text(
+                          _statusLabel,
+                          style: GoogleFonts.inter(
+                            fontSize: 10,
+                            fontWeight: FontWeight.w600,
+                            color: _statusColor,
+                          ),
+                        ),
                       ),
-                    ),
+                      if (widget.hold.holdStatus == HoldStatus.ready && readyAt != null) ...[
+                        const SizedBox(width: 6),
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFFF59E0B).withValues(alpha: 0.15),
+                            borderRadius: BorderRadius.circular(4),
+                          ),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              const Icon(
+                                Icons.timer_outlined,
+                                size: 10,
+                                color: Color(0xFFF59E0B),
+                              ),
+                              const SizedBox(width: 2),
+                              Text(
+                                daysRemaining,
+                                style: GoogleFonts.inter(
+                                  fontSize: 10,
+                                  fontWeight: FontWeight.w600,
+                                  color: const Color(0xFFF59E0B),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ],
                   ),
                 ],
               ),
@@ -593,10 +680,54 @@ class _BookHoldCardState extends State<_BookHoldCard> {
                   ),
                 ),
                 const SizedBox(height: 4),
-                const Icon(
-                  Icons.chevron_right_rounded,
-                  color: Color(0xFF8A929D),
-                ),
+                if (widget.hold.holdStatus != HoldStatus.cancelled)
+                  GestureDetector(
+                    onTap: () {
+                      showDialog(
+                        context: context,
+                        builder: (context) => AlertDialog(
+                          title: const Text('Remove Hold'),
+                          content: const Text('Are you sure you want to remove this book hold?'),
+                          actions: [
+                            TextButton(
+                              onPressed: () => Navigator.pop(context),
+                              child: const Text('Cancel'),
+                            ),
+                            TextButton(
+                              onPressed: () {
+                                Navigator.pop(context);
+                                _removeHold();
+                              },
+                              style: TextButton.styleFrom(
+                                foregroundColor: Colors.red,
+                              ),
+                              child: const Text('Remove'),
+                            ),
+                          ],
+                        ),
+                      );
+                    },
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                      decoration: BoxDecoration(
+                        color: Colors.red.withValues(alpha: 0.1),
+                        borderRadius: BorderRadius.circular(6),
+                      ),
+                      child: Text(
+                        'Remove',
+                        style: GoogleFonts.inter(
+                          fontSize: 10,
+                          fontWeight: FontWeight.w600,
+                          color: Colors.red,
+                        ),
+                      ),
+                    ),
+                  )
+                else
+                  const Icon(
+                    Icons.chevron_right_rounded,
+                    color: Color(0xFF8A929D),
+                  ),
               ],
             ),
           ],

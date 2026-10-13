@@ -6,6 +6,7 @@ import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:read_space/firebase_options.dart';
+import 'package:read_space/models/book.dart';
 import 'package:read_space/models/fine_appeal.dart';
 import 'package:read_space/pages/admin_appeal_details_screen.dart';
 import 'package:read_space/pages/admin_appeals_screen.dart';
@@ -172,8 +173,6 @@ class ReadSpaceApp extends StatelessWidget {
         AppRoutes.librarianDashboard: (_) => const LibrarianDashboardScreen(),
         AppRoutes.librarianProfile: (_) => const LibrarianProfileScreen(),
         AppRoutes.librarianInventory: (_) => const LibrarianInventoryScreen(),
-        AppRoutes.librarianAddBook: (_) => const LibrarianAddBookScreen(),
-        AppRoutes.createLibrarian: (_) => const CreateLibrarianScreen(),
         AppRoutes.catalogue: (_) => const CatalogueScreen(),
         AppRoutes.holds: (_) => const HoldsScreen(),
         AppRoutes.fineAppeals: (_) => const FineAppealsScreen(),
@@ -330,6 +329,54 @@ class ReadSpaceApp extends StatelessWidget {
             settings: settings,
             pageBuilder: (_, animation, _) =>
                 SubmitAppealScreen(existingAppeal: existingAppeal),
+            transitionsBuilder: (_, animation, _, child) {
+              final curved = CurvedAnimation(
+                parent: animation,
+                curve: Curves.easeOutCubic,
+              );
+              return FadeTransition(
+                opacity: curved,
+                child: SlideTransition(
+                  position: Tween<Offset>(
+                    begin: const Offset(0.04, 0),
+                    end: Offset.zero,
+                  ).animate(curved),
+                  child: child,
+                ),
+              );
+            },
+          );
+        }
+        if (settings.name == AppRoutes.createLibrarian) {
+          final librarianData = settings.arguments as Map<String, dynamic>?;
+          return PageRouteBuilder<void>(
+            settings: settings,
+            pageBuilder: (_, animation, _) =>
+                CreateLibrarianScreen(librarianData: librarianData),
+            transitionsBuilder: (_, animation, _, child) {
+              final curved = CurvedAnimation(
+                parent: animation,
+                curve: Curves.easeOutCubic,
+              );
+              return FadeTransition(
+                opacity: curved,
+                child: SlideTransition(
+                  position: Tween<Offset>(
+                    begin: const Offset(0.04, 0),
+                    end: Offset.zero,
+                  ).animate(curved),
+                  child: child,
+                ),
+              );
+            },
+          );
+        }
+        if (settings.name == AppRoutes.librarianAddBook) {
+          final book = settings.arguments as Book?;
+          return PageRouteBuilder<void>(
+            settings: settings,
+            pageBuilder: (_, animation, _) =>
+                LibrarianAddBookScreen(book: book),
             transitionsBuilder: (_, animation, _, child) {
               final curved = CurvedAnimation(
                 parent: animation,

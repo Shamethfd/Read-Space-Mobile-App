@@ -5,7 +5,9 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:read_space/main.dart' show AppTheme;
 
 class CreateLibrarianScreen extends StatefulWidget {
-  const CreateLibrarianScreen({super.key});
+  const CreateLibrarianScreen({super.key, this.librarianData});
+
+  final Map<String, dynamic>? librarianData;
 
   @override
   State<CreateLibrarianScreen> createState() => _CreateLibrarianScreenState();
@@ -23,6 +25,18 @@ class _CreateLibrarianScreenState extends State<CreateLibrarianScreen> {
   bool _isLoading = false;
   final FirebaseAuth _auth = FirebaseAuth.instance;
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
+
+  @override
+  void initState() {
+    super.initState();
+    if (widget.librarianData != null) {
+      // Edit mode - populate fields
+      _fullNameController.text = widget.librarianData!['fullName'] ?? '';
+      _emailController.text = widget.librarianData!['universityEmail'] ?? widget.librarianData!['email'] ?? '';
+      _employeeIdController.text = widget.librarianData!['employeeId'] ?? '';
+      _phoneController.text = widget.librarianData!['phoneNumber'] ?? '';
+    }
+  }
 
   @override
   void dispose() {
@@ -43,31 +57,54 @@ class _CreateLibrarianScreenState extends State<CreateLibrarianScreen> {
     setState(() => _isLoading = true);
 
     try {
-      // Create Firebase Auth user (convert email to lowercase for case-insensitive matching)
-      final userCredential = await _auth.createUserWithEmailAndPassword(
-        email: _emailController.text.trim().toLowerCase(),
-        password: _passwordController.text,
-      );
+      if (widget.librarianData != null) {
+        // Edit mode - update existing librarian
+        await _firestore.collection('users').doc(widget.librarianData!['uid']).update({
+          'fullName': _fullNameController.text.trim(),
+          'universityEmail': _emailController.text.trim().toLowerCase(),
+          'employeeId': _employeeIdController.text.trim(),
+          'phoneNumber': _phoneController.text.trim(),
+          'updatedAt': DateTime.now().toIso8601String(),
+        });
 
-      // Create Firestore user document
-      await _firestore.collection('users').doc(userCredential.user!.uid).set({
-        'fullName': _fullNameController.text.trim(),
-        'email': _emailController.text.trim().toLowerCase(),
-        'employeeId': _employeeIdController.text.trim(),
-        'phoneNumber': _phoneController.text.trim(),
-        'role': 'librarian',
-        'createdAt': DateTime.now().toIso8601String(),
-        'isActive': true,
-      });
-
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Librarian account created successfully'),
-            backgroundColor: AppTheme.success,
-          ),
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Librarian updated successfully'),
+              backgroundColor: AppTheme.success,
+            ),
+          );
+          Navigator.pop(context, true);
+        }
+      } else {
+        // Create mode - create new librarian
+        // Create Firebase Auth user (convert email to lowercase for case-insensitive matching)
+        final userCredential = await _auth.createUserWithEmailAndPassword(
+          email: _emailController.text.trim().toLowerCase(),
+          password: _passwordController.text,
         );
-        Navigator.pop(context);
+
+        // Create Firestore user document
+        await _firestore.collection('users').doc(userCredential.user!.uid).set({
+          'fullName': _fullNameController.text.trim(),
+          'email': _emailController.text.trim().toLowerCase(),
+          'universityEmail': _emailController.text.trim().toLowerCase(),
+          'employeeId': _employeeIdController.text.trim(),
+          'phoneNumber': _phoneController.text.trim(),
+          'role': 'librarian',
+          'createdAt': DateTime.now().toIso8601String(),
+          'isActive': true,
+        });
+
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Librarian account created successfully'),
+              backgroundColor: AppTheme.success,
+            ),
+          );
+          Navigator.pop(context);
+        }
       }
     } on FirebaseAuthException catch (e) {
       String errorMessage = 'Failed to create librarian account';
@@ -113,7 +150,7 @@ class _CreateLibrarianScreenState extends State<CreateLibrarianScreen> {
           icon: const Icon(Icons.arrow_back, color: AppTheme.textPrimary),
         ),
         title: Text(
-          'Create Librarian',
+          widget.librarianData != null ? 'Edit Librarian' : 'Create Librarian',
           style: GoogleFonts.poppins(
             fontSize: 18,
             fontWeight: FontWeight.w600,
@@ -146,8 +183,15 @@ class _CreateLibrarianScreenState extends State<CreateLibrarianScreen> {
                     if ((value ?? '').trim().isEmpty) {
                       return 'Full name is required';
                     }
+                    if (value!.trim().length < 2) {
+                      return 'Full name must be at least 2 characters';
+                    }
+                    if (value.trim().length > 50) {
+                      return 'Full name must not exceed 50 characters';
+                    }
                     return null;
                   },
+                  maxLength: 50,
                 ),
                 const SizedBox(height: 8),
                 _buildTextField(
@@ -160,12 +204,13 @@ class _CreateLibrarianScreenState extends State<CreateLibrarianScreen> {
                     if (input.isEmpty) {
                       return 'Email is required';
                     }
-                    final emailRegex = RegExp(r'^[^@\s]+@[^@\s]+\.[^@\s]+$');
+                    final emailRegex = RegExp(r'^[\w-\.]+@([\w-]+\.)+[\w-]{2,}$');
                     if (!emailRegex.hasMatch(input)) {
-                      return 'Enter a valid email';
+                      return 'Enter a valid email address';
                     }
                     return null;
                   },
+                  maxLength: 100,
                 ),
                 const SizedBox(height: 8),
                 _buildTextField(
@@ -176,47 +221,74 @@ class _CreateLibrarianScreenState extends State<CreateLibrarianScreen> {
                     if ((value ?? '').trim().isEmpty) {
                       return 'Employee ID is required';
                     }
+                    if (value!.trim().length < 3) {
+                      return 'Employee ID must be at least 3 characters';
+                    }
+                    if (value.trim().length > 20) {
+                      return 'Employee ID must not exceed 20 characters';
+                    }
                     return null;
                   },
+                  maxLength: 20,
                 ),
                 const SizedBox(height: 8),
                 _buildTextField(
                   label: 'Phone Number',
                   icon: Icons.phone_outlined,
                   controller: _phoneController,
-                  keyboardType: TextInputType.phone,
+                  keyboardType: TextInputType.number,
                   validator: (value) {
                     if ((value ?? '').trim().isEmpty) {
                       return 'Phone number is required';
                     }
+                    if (value!.trim().length < 10) {
+                      return 'Enter a valid phone number (at least 10 digits)';
+                    }
+                    if (value.trim().length > 15) {
+                      return 'Phone number is too long';
+                    }
                     return null;
                   },
+                  maxLength: 15,
                 ),
                 const SizedBox(height: 8),
-                _buildPasswordField(
-                  label: 'Password',
-                  controller: _passwordController,
-                  validator: (value) {
-                    if ((value ?? '').length < 8) {
-                      return 'Password must be at least 8 characters';
-                    }
-                    return null;
-                  },
-                ),
-                const SizedBox(height: 8),
-                _buildPasswordField(
-                  label: 'Confirm Password',
-                  controller: _confirmPasswordController,
-                  validator: (value) {
-                    if (value != _passwordController.text) {
-                      return 'Passwords do not match';
-                    }
-                    if ((value ?? '').length < 8) {
-                      return 'Password must be at least 8 characters';
-                    }
-                    return null;
-                  },
-                ),
+                // Only show password fields in create mode
+                if (widget.librarianData == null) ...[
+                  _buildPasswordField(
+                    label: 'Password',
+                    controller: _passwordController,
+                    validator: (value) {
+                      if ((value ?? '').length < 8) {
+                        return 'Password must be at least 8 characters';
+                      }
+                      if (value!.length > 32) {
+                        return 'Password must not exceed 32 characters';
+                      }
+                      // Check for at least one letter and one number
+                      if (!RegExp(r'[a-zA-Z]').hasMatch(value)) {
+                        return 'Password must contain at least one letter';
+                      }
+                      if (!RegExp(r'[0-9]').hasMatch(value)) {
+                        return 'Password must contain at least one number';
+                      }
+                      return null;
+                    },
+                  ),
+                  const SizedBox(height: 8),
+                  _buildPasswordField(
+                    label: 'Confirm Password',
+                    controller: _confirmPasswordController,
+                    validator: (value) {
+                      if (value != _passwordController.text) {
+                        return 'Passwords do not match';
+                      }
+                      if ((value ?? '').length < 8) {
+                        return 'Password must be at least 8 characters';
+                      }
+                      return null;
+                    },
+                  ),
+                ],
                 const SizedBox(height: 24),
                 ElevatedButton(
                   onPressed: _isLoading ? null : _createLibrarian,
@@ -260,6 +332,7 @@ class _CreateLibrarianScreenState extends State<CreateLibrarianScreen> {
     required TextEditingController controller,
     String? Function(String?)? validator,
     TextInputType? keyboardType,
+    int? maxLength,
   }) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -277,6 +350,7 @@ class _CreateLibrarianScreenState extends State<CreateLibrarianScreen> {
           controller: controller,
           validator: validator,
           keyboardType: keyboardType,
+          maxLength: maxLength,
           textInputAction: TextInputAction.next,
           style: GoogleFonts.poppins(fontSize: 14, color: AppTheme.textPrimary),
           decoration: InputDecoration(

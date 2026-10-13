@@ -1,8 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:image_picker/image_picker.dart';
+import 'dart:io';
 import 'package:read_space/main.dart' show AppTheme, PrimaryButton;
 import 'package:read_space/models/notice.dart';
 import 'package:read_space/services/notice_service.dart';
+import 'package:read_space/services/cloudinary_service.dart';
 
 class PublishNoticeScreen extends StatefulWidget {
   const PublishNoticeScreen({super.key});
@@ -16,6 +19,8 @@ class _PublishNoticeScreenState extends State<PublishNoticeScreen> {
   final _titleController = TextEditingController();
   final _descriptionController = TextEditingController();
   final _noticeService = NoticeService();
+  final ImagePicker _picker = ImagePicker();
+  final CloudinaryService _cloudinaryService = CloudinaryService();
 
   NoticeCategory _selectedCategory = NoticeCategory.general;
   NoticePriority _selectedPriority = NoticePriority.normal;
@@ -25,6 +30,9 @@ class _PublishNoticeScreenState extends State<PublishNoticeScreen> {
 
   bool _isLoading = false;
   bool _isSavingDraft = false;
+  bool _isUploadingImage = false;
+
+  File? _noticeImage;
 
   @override
   void dispose() {
@@ -35,6 +43,29 @@ class _PublishNoticeScreenState extends State<PublishNoticeScreen> {
 
   Future<void> _publishNotice() async {
     if (!_formKey.currentState!.validate()) {
+      return;
+    }
+
+    // Validate dates
+    if (_eventDate != null && _expiryDate != null) {
+      if (_expiryDate!.isBefore(_eventDate!)) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Expiry date must be after event date'),
+            backgroundColor: AppTheme.red,
+          ),
+        );
+        return;
+      }
+    }
+
+    if (_expiryDate != null && _expiryDate!.isBefore(DateTime.now())) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Expiry date must be in the future'),
+          backgroundColor: AppTheme.red,
+        ),
+      );
       return;
     }
 
@@ -248,8 +279,15 @@ class _PublishNoticeScreenState extends State<PublishNoticeScreen> {
             if (value == null || value.trim().isEmpty) {
               return 'Please enter a title';
             }
+            if (value.trim().length < 5) {
+              return 'Title must be at least 5 characters';
+            }
+            if (value.trim().length > 100) {
+              return 'Title must not exceed 100 characters';
+            }
             return null;
           },
+          maxLength: 100,
           style: GoogleFonts.poppins(fontSize: 14, color: AppTheme.textPrimary),
           decoration: InputDecoration(
             hintText: 'e.g., Library Closure on Public Holiday',
@@ -340,8 +378,15 @@ class _PublishNoticeScreenState extends State<PublishNoticeScreen> {
             if (value == null || value.trim().isEmpty) {
               return 'Please enter a description';
             }
+            if (value.trim().length < 10) {
+              return 'Description must be at least 10 characters';
+            }
+            if (value.trim().length > 500) {
+              return 'Description must not exceed 500 characters';
+            }
             return null;
           },
+          maxLength: 500,
           style: GoogleFonts.poppins(fontSize: 14, color: AppTheme.textPrimary),
           decoration: InputDecoration(
             hintText: 'Enter the notice details...',
@@ -507,7 +552,7 @@ class _PublishNoticeScreenState extends State<PublishNoticeScreen> {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(
-          'Attachment (Optional)',
+          'Notice Image (Optional)',
           style: GoogleFonts.poppins(
             fontSize: 13,
             fontWeight: FontWeight.w500,
@@ -516,40 +561,132 @@ class _PublishNoticeScreenState extends State<PublishNoticeScreen> {
         ),
         const SizedBox(height: 8),
         InkWell(
-          onTap: () {
-            // TODO: Implement file upload
-            ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(
-                content: Text('File upload will be implemented with backend integration.'),
-              ),
-            );
-          },
+          onTap: _pickNoticeImage,
           child: Container(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+            height: 150,
             decoration: BoxDecoration(
               color: const Color(0xFFF3F4F6),
               borderRadius: BorderRadius.circular(14),
               border: Border.all(color: AppTheme.border),
             ),
-            child: Row(
-              children: [
-                const Icon(Icons.attach_file, color: AppTheme.secondaryText, size: 20),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Text(
-                    _attachmentUrl != null ? 'File attached' : 'Attach a file',
-                    style: GoogleFonts.poppins(
-                      fontSize: 14,
-                      color: _attachmentUrl != null ? AppTheme.textPrimary : AppTheme.secondaryText,
-                    ),
+            child: _noticeImage != null
+                ? Stack(
+                    children: [
+                      Positioned.fill(
+                        child: ClipRRect(
+                          borderRadius: BorderRadius.circular(14),
+                          child: Image.file(
+                            _noticeImage!,
+                            fit: BoxFit.cover,
+                          ),
+                        ),
+                      ),
+                      Positioned(
+                        bottom: 8,
+                        right: 8,
+                        child: Container(
+                          padding: const EdgeInsets.all(8),
+                          decoration: BoxDecoration(
+                            color: Colors.black.withValues(alpha: 0.6),
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              if (_isUploadingImage)
+                                const SizedBox(
+                                  width: 16,
+                                  height: 16,
+                                  child: CircularProgressIndicator(
+                                    strokeWidth: 2,
+                                    valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                                  ),
+                                )
+                              else
+                                const Icon(Icons.check_circle, color: Colors.white, size: 16),
+                              const SizedBox(width: 4),
+                              Text(
+                                _isUploadingImage ? 'Uploading...' : 'Selected',
+                                style: GoogleFonts.poppins(
+                                  fontSize: 12,
+                                  color: Colors.white,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                      Positioned(
+                        top: 8,
+                        right: 8,
+                        child: IconButton(
+                          onPressed: () {
+                            setState(() {
+                              _noticeImage = null;
+                              _attachmentUrl = null;
+                            });
+                          },
+                          icon: Container(
+                            padding: const EdgeInsets.all(8),
+                            decoration: BoxDecoration(
+                              color: Colors.black.withValues(alpha: 0.5),
+                              shape: BoxShape.circle,
+                            ),
+                            child: const Icon(
+                              Icons.close,
+                              color: Colors.white,
+                              size: 20,
+                            ),
+                          ),
+                        ),
+                      ),
+                    ],
+                  )
+                : Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Icon(
+                        Icons.add_photo_alternate_outlined,
+                        size: 40,
+                        color: AppTheme.secondaryText,
+                      ),
+                      const SizedBox(height: 8),
+                      Text(
+                        'Tap to add image',
+                        style: GoogleFonts.poppins(
+                          fontSize: 13,
+                          color: AppTheme.secondaryText,
+                        ),
+                      ),
+                    ],
                   ),
-                ),
-              ],
-            ),
           ),
         ),
       ],
     );
+  }
+
+  Future<void> _pickNoticeImage() async {
+    try {
+      final XFile? image = await _picker.pickImage(
+        source: ImageSource.gallery,
+        imageQuality: 80,
+      );
+      if (image != null) {
+        setState(() {
+          _noticeImage = File(image.path);
+        });
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Failed to pick image: $e'),
+            backgroundColor: AppTheme.red,
+          ),
+        );
+      }
+    }
   }
 
   String _getCategoryLabel(NoticeCategory category) {
