@@ -153,13 +153,15 @@ class ReadSpaceApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final initialRoute = Uri.base.fragment.split('?').first == AppRoutes.seatBooking
+        ? AppRoutes.seatBooking
+        : AppRoutes.signup;
+    print('🚀 Initial route: $initialRoute');
     return MaterialApp(
       title: 'ReadSpace',
       debugShowCheckedModeBanner: false,
       theme: AppTheme.lightTheme,
-      initialRoute: Uri.base.fragment.split('?').first == AppRoutes.seatBooking
-          ? AppRoutes.seatBooking
-          : AppRoutes.splash,
+      initialRoute: initialRoute,
       routes: {
         AppRoutes.splash: (_) => const SplashScreen(),
         AppRoutes.onboarding: (_) => const OnboardingScreen(),
@@ -495,21 +497,9 @@ class ReadSpaceLogo extends StatelessWidget {
     final cardWidth = width ?? (compact ? 170.0 : 220.0);
     final cardHeight = height ?? (compact ? 72.0 : 94.0);
 
-    return Container(
+    return SizedBox(
       width: cardWidth,
       height: cardHeight,
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(22),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.08),
-            blurRadius: 14,
-            offset: const Offset(0, 8),
-          ),
-        ],
-      ),
       child: Image.asset(
         'assets/images/readspace_logo.png',
         fit: BoxFit.contain,
@@ -761,8 +751,9 @@ class _SplashScreenState extends State<SplashScreen> {
   void _checkAuthState() {
     Timer(const Duration(milliseconds: 2200), () {
       if (mounted) {
-        // Always go to onboarding - user must login explicitly
-        Navigator.pushReplacementNamed(context, AppRoutes.onboarding);
+        // Always go to login - user must login explicitly
+        print('🚀 Splash screen navigating to login');
+        Navigator.pushReplacementNamed(context, AppRoutes.login);
       }
     });
   }
@@ -790,63 +781,106 @@ class _SplashScreenState extends State<SplashScreen> {
   }
 }
 
-class OnboardingScreen extends StatelessWidget {
+class OnboardingScreen extends StatefulWidget {
   const OnboardingScreen({super.key});
 
   @override
+  State<OnboardingScreen> createState() => _OnboardingScreenState();
+}
+
+class _OnboardingScreenState extends State<OnboardingScreen>
+    with SingleTickerProviderStateMixin {
+  late AnimationController _controller;
+  late Animation<double> _fadeAnimation;
+  late Animation<Offset> _slideAnimation;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = AnimationController(
+      duration: const Duration(milliseconds: 800),
+      vsync: this,
+    );
+
+    _fadeAnimation = Tween<double>(begin: 0.0, end: 1.0).animate(
+      CurvedAnimation(parent: _controller, curve: Curves.easeOut),
+    );
+
+    _slideAnimation = Tween<Offset>(
+      begin: const Offset(0, 0.3),
+      end: Offset.zero,
+    ).animate(CurvedAnimation(parent: _controller, curve: Curves.easeOut));
+
+    _controller.forward();
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
+    print('⚠️ OnboardingScreen building - this should not happen after logout');
     return Scaffold(
       backgroundColor: AppTheme.primaryBlue,
       body: SafeArea(
         child: Padding(
           padding: const EdgeInsets.symmetric(horizontal: 22),
-          child: Column(
-            children: [
-              const SizedBox(height: 16),
-              const ReadSpaceLogo(width: 180, height: 76),
-              const SizedBox(height: 18),
-              Text(
-                'Welcome to ReadSpace — your smart library companion.',
-                textAlign: TextAlign.center,
-                style: GoogleFonts.poppins(
-                  fontSize: 15,
-                  fontWeight: FontWeight.w500,
-                  color: Colors.white,
-                  height: 1.4,
-                ),
-              ),
-              const SizedBox(height: 22),
-              Expanded(
-                child: Stack(
-                  alignment: Alignment.bottomCenter,
-                  children: [
-                    Positioned.fill(
-                      child: Padding(
-                        padding: const EdgeInsets.only(bottom: 34),
-                        child: ClipRRect(
-                          borderRadius: BorderRadius.circular(36),
-                          child: Image.asset(
-                            'assets/images/onboarding_students.jpg',
-                            fit: BoxFit.cover,
+          child: FadeTransition(
+            opacity: _fadeAnimation,
+            child: SlideTransition(
+              position: _slideAnimation,
+              child: Column(
+                children: [
+                  const SizedBox(height: 16),
+                  const ReadSpaceLogo(width: 180, height: 76),
+                  const SizedBox(height: 18),
+                  Text(
+                    'Welcome to ReadSpace — your smart library companion.',
+                    textAlign: TextAlign.center,
+                    style: GoogleFonts.poppins(
+                      fontSize: 15,
+                      fontWeight: FontWeight.w500,
+                      color: Colors.white,
+                      height: 1.4,
+                    ),
+                  ),
+                  const SizedBox(height: 22),
+                  Expanded(
+                    child: Stack(
+                      alignment: Alignment.bottomCenter,
+                      children: [
+                        Positioned.fill(
+                          child: Padding(
+                            padding: const EdgeInsets.only(bottom: 34),
+                            child: ClipRRect(
+                              borderRadius: BorderRadius.circular(36),
+                              child: Image.asset(
+                                'assets/images/onboarding_students.jpg',
+                                fit: BoxFit.cover,
+                              ),
+                            ),
                           ),
                         ),
-                      ),
+                        Positioned(
+                          bottom: 0,
+                          child: PrimaryButton(
+                            label: 'Get Started',
+                            width: 230,
+                            backgroundColor: AppTheme.orange,
+                            foregroundColor: Colors.white,
+                            onPressed: () =>
+                                Navigator.pushNamed(context, AppRoutes.login),
+                          ),
+                        ),
+                      ],
                     ),
-                    Positioned(
-                      bottom: 0,
-                      child: PrimaryButton(
-                        label: 'Get Started',
-                        width: 230,
-                        backgroundColor: AppTheme.orange,
-                        foregroundColor: Colors.white,
-                        onPressed: () =>
-                            Navigator.pushNamed(context, AppRoutes.signup),
-                      ),
-                    ),
-                  ],
-                ),
+                  ),
+                ],
               ),
-            ],
+            ),
           ),
         ),
       ),
@@ -870,6 +904,12 @@ class _SignUpScreenState extends State<SignUpScreen> {
   bool _termsAccepted = false;
   bool _isLoading = false;
   final AuthService _authService = AuthService();
+
+  @override
+  void initState() {
+    super.initState();
+    print('📱 SignUpScreen initState');
+  }
 
   @override
   void dispose() {
@@ -941,8 +981,8 @@ class _SignUpScreenState extends State<SignUpScreen> {
                       children: [
                         const ReadSpaceLogo(
                           compact: true,
-                          width: 180,
-                          height: 66,
+                          width: 220,
+                          height: 82,
                         ),
                         const SizedBox(height: 18),
                         Text(
@@ -1123,6 +1163,12 @@ class _LoginScreenState extends State<LoginScreen> {
   final AuthService _authService = AuthService();
 
   @override
+  void initState() {
+    super.initState();
+    print('📱 LoginScreen initState');
+  }
+
+  @override
   void dispose() {
     _emailController.dispose();
     _passwordController.dispose();
@@ -1207,11 +1253,16 @@ class _LoginScreenState extends State<LoginScreen> {
 
   @override
   Widget build(BuildContext context) {
+    print('📱 LoginScreen build method called');
+    print('📱 Email controller: ${_emailController.text}');
+    print('📱 Password controller: ${_passwordController.text}');
+    print('📱 Is loading: $_isLoading');
     return Scaffold(
       backgroundColor: const Color(0xFFF8F9FB),
       body: SafeArea(
         child: LayoutBuilder(
           builder: (context, constraints) {
+            print('📱 LayoutBuilder called');
             return SingleChildScrollView(
               padding: const EdgeInsets.fromLTRB(24, 20, 24, 24),
               child: ConstrainedBox(
@@ -1224,8 +1275,8 @@ class _LoginScreenState extends State<LoginScreen> {
                       children: [
                         const ReadSpaceLogo(
                           compact: true,
-                          width: 180,
-                          height: 66,
+                          width: 220,
+                          height: 82,
                         ),
                         const SizedBox(height: 14),
                         Text(

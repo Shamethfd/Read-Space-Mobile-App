@@ -277,7 +277,12 @@ class _EditProfilePageState extends State<EditProfilePage> {
       ),
     );
     if (shouldLogout == true && mounted) {
-      Navigator.of(context).popUntil((route) => route.isFirst);
+      await FirebaseAuth.instance.signOut();
+      if (!mounted) return;
+      Navigator.of(context, rootNavigator: true).pushNamedAndRemoveUntil(
+        AppRoutes.login,
+        (route) => false,
+      );
     }
   }
 

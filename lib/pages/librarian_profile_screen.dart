@@ -545,7 +545,10 @@ class _LibrarianProfileScreenState extends State<LibrarianProfileScreen> {
           onTap: () async {
             await FirebaseAuth.instance.signOut();
             if (mounted) {
-              Navigator.pushReplacementNamed(context, AppRoutes.login);
+              Navigator.of(context, rootNavigator: true).pushNamedAndRemoveUntil(
+                AppRoutes.librarianLogin,
+                (route) => false,
+              );
             }
           },
         ),
