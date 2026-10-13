@@ -23,8 +23,11 @@ import 'package:read_space/pages/fine_appeals_screen.dart';
 import 'package:read_space/pages/hold_request_screen.dart';
 import 'package:read_space/pages/holds_screen.dart';
 import 'package:read_space/pages/librarian_add_book_screen.dart';
+import 'package:read_space/pages/librarian_analytics_screen.dart';
+import 'package:read_space/pages/librarian_book_holders_screen.dart';
 import 'package:read_space/pages/librarian_dashboard_screen.dart';
 import 'package:read_space/pages/librarian_inventory_screen.dart';
+import 'package:read_space/pages/librarian_login_screen.dart';
 import 'package:read_space/pages/librarian_profile_screen.dart';
 import 'package:read_space/pages/manage_seat_reservation_screen.dart';
 import 'package:read_space/pages/member_profile_page.dart';
@@ -89,6 +92,7 @@ class AppRoutes {
   static const manageSeatReservation = '/manage-seat-reservation';
   static const librarianAnalytics = '/librarian-analytics';
   static const seatOccupancy = '/seat-occupancy';
+  static const librarianBookHolders = '/librarian-book-holders';
 }
 
 class AppTheme {
@@ -182,6 +186,7 @@ class ReadSpaceApp extends StatelessWidget {
         AppRoutes.myReservations: (_) => const MyReservationsScreen(),
         AppRoutes.librarianAnalytics: (_) => const LibrarianAnalyticsScreen(),
         AppRoutes.seatOccupancy: (_) => const SeatOccupancyScreen(),
+        AppRoutes.librarianBookHolders: (_) => const LibrarianBookHoldersScreen(),
       },
       onGenerateRoute: (settings) {
         if (settings.name == AppRoutes.editProfile) {

@@ -521,7 +521,7 @@ class _LibrarianDashboardScreenState extends State<LibrarianDashboardScreen> {
               ),
             ),
             GestureDetector(
-              onTap: () => Navigator.pushNamed(context, AppRoutes.holds),
+              onTap: () => Navigator.pushNamed(context, AppRoutes.librarianBookHolders),
               child: Text(
                 'View All',
                 style: GoogleFonts.poppins(
@@ -538,8 +538,7 @@ class _LibrarianDashboardScreenState extends State<LibrarianDashboardScreen> {
           stream: FirebaseFirestore.instance
               .collection('holds')
               .where('holdStatus', whereIn: ['pending', 'ready'])
-              .orderBy('createdAt', descending: true)
-              .limit(5)
+              .limit(10)
               .snapshots(),
           builder: (context, snapshot) {
             if (snapshot.connectionState == ConnectionState.waiting) {
@@ -547,8 +546,20 @@ class _LibrarianDashboardScreenState extends State<LibrarianDashboardScreen> {
             }
 
             final holds = snapshot.data?.docs ?? [];
+            
+            // Sort in memory by createdAt descending
+            final sortedHolds = holds.toList()
+              ..sort((a, b) {
+                final aData = a.data() as Map<String, dynamic>;
+                final bData = b.data() as Map<String, dynamic>;
+                final aCreatedAt = aData['createdAt'] as String? ?? '';
+                final bCreatedAt = bData['createdAt'] as String? ?? '';
+                return bCreatedAt.compareTo(aCreatedAt);
+              });
+            
+            final limitedHolds = sortedHolds.take(5).toList();
 
-            if (holds.isEmpty) {
+            if (limitedHolds.isEmpty) {
               return Container(
                 padding: const EdgeInsets.all(16),
                 decoration: BoxDecoration(
@@ -579,7 +590,7 @@ class _LibrarianDashboardScreenState extends State<LibrarianDashboardScreen> {
             }
 
             return Column(
-              children: holds.map((doc) {
+              children: limitedHolds.map((doc) {
                 final data = doc.data() as Map<String, dynamic>;
                 final bookId = data['bookId'] as String? ?? '';
                 final userId = data['userId'] as String? ?? '';
@@ -701,9 +712,8 @@ class _LibrarianDashboardScreenState extends State<LibrarianDashboardScreen> {
     return StreamBuilder<QuerySnapshot>(
       stream: FirebaseFirestore.instance
           .collection('seatBookings')
-          .where('status', whereIn: ['pending', 'confirmed', 'completed'])
-          .orderBy('date', descending: true)
-          .limit(50)
+          .where('status', whereIn: ['pending', 'confirmed'])
+          .limit(100)
           .snapshots(),
       builder: (context, snapshot) {
         final bookings = snapshot.data?.docs ?? [];
