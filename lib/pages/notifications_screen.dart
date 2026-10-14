@@ -176,8 +176,12 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
               notice: notice,
               isUnread: isUnread,
               onTap: () async {
-                await _markAsRead(notice);
+                print('📢 Notice tapped: ${notice.title}');
+                // Mark as read in background without blocking navigation
+                _markAsRead(notice);
+                // Navigate immediately
                 if (mounted) {
+                  print('🚀 Navigating to notice details');
                   Navigator.pushNamed(
                     context,
                     AppRoutes.noticeDetails,

@@ -916,7 +916,7 @@ class _LibrarianDashboardScreenState extends State<LibrarianDashboardScreen> {
         const SizedBox(width: 12),
         Expanded(
           child: InkWell(
-            onTap: () => Navigator.pushNamed(context, AppRoutes.adminNotices),
+            onTap: () => Navigator.pushNamed(context, AppRoutes.publishNotice),
             borderRadius: BorderRadius.circular(12),
             child: Container(
               padding: const EdgeInsets.symmetric(vertical: 14),

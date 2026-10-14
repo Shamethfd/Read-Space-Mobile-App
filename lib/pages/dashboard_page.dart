@@ -230,6 +230,10 @@ class _DashboardHeaderState extends State<_DashboardHeader> {
     }
   }
 
+  void _refreshUnreadCount() {
+    _loadUnreadCount();
+  }
+
   Future<void> _loadUserProfile() async {
     if (widget.userId == null) return;
     try {
@@ -303,7 +307,9 @@ class _DashboardHeaderState extends State<_DashboardHeader> {
               count: _unreadCount,
               child: IconButton(
                 onPressed: () {
-                  Navigator.pushNamed(context, AppRoutes.notifications);
+                  Navigator.pushNamed(context, AppRoutes.notifications).then((_) {
+                    _refreshUnreadCount();
+                  });
                 },
                 tooltip: 'Notifications',
                 icon: const Icon(
