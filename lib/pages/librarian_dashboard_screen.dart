@@ -4,7 +4,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:read_space/main.dart' show AppTheme, AppRoutes;
 import 'package:read_space/services/firestore_service.dart';
-import 'package:read_space/widgets/library_bottom_navigation.dart';
+import 'package:read_space/widgets/librarian_bottom_navigation.dart';
 
 class LibrarianDashboardScreen extends StatefulWidget {
   const LibrarianDashboardScreen({super.key});
@@ -59,7 +59,7 @@ class _LibrarianDashboardScreenState extends State<LibrarianDashboardScreen> {
                 ),
               ),
             ),
-            LibraryBottomNavigation(
+            LibrarianBottomNavigation(
               selectedIndex: _currentIndex,
               onSelected: _handleNavigation,
             ),

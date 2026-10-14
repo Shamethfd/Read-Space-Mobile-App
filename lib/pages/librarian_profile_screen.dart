@@ -6,7 +6,7 @@ import 'package:image_picker/image_picker.dart';
 import 'dart:io';
 import 'package:read_space/main.dart' show AppTheme, AppRoutes;
 import 'package:read_space/services/cloudinary_service.dart';
-import 'package:read_space/widgets/library_bottom_navigation.dart';
+import 'package:read_space/widgets/librarian_bottom_navigation.dart';
 
 class LibrarianProfileScreen extends StatefulWidget {
   const LibrarianProfileScreen({super.key});
@@ -63,7 +63,7 @@ class _LibrarianProfileScreenState extends State<LibrarianProfileScreen> {
                 ),
               ),
             ),
-            LibraryBottomNavigation(
+            LibrarianBottomNavigation(
               selectedIndex: _currentIndex,
               onSelected: _handleNavigation,
             ),
@@ -546,7 +546,7 @@ class _LibrarianProfileScreenState extends State<LibrarianProfileScreen> {
             await FirebaseAuth.instance.signOut();
             if (mounted) {
               Navigator.of(context, rootNavigator: true).pushNamedAndRemoveUntil(
-                AppRoutes.librarianLogin,
+                AppRoutes.signup,
                 (route) => false,
               );
             }

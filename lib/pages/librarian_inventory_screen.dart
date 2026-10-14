@@ -5,7 +5,7 @@ import 'package:read_space/services/firestore_service.dart';
 import 'package:read_space/models/book.dart';
 import 'package:read_space/models/seat.dart';
 import 'package:read_space/models/booking.dart';
-import 'package:read_space/widgets/library_bottom_navigation.dart';
+import 'package:read_space/widgets/librarian_bottom_navigation.dart';
 
 class LibrarianInventoryScreen extends StatefulWidget {
   const LibrarianInventoryScreen({super.key});
@@ -52,7 +52,7 @@ class _LibrarianInventoryScreenState extends State<LibrarianInventoryScreen> {
                 ),
               ),
             ),
-            LibraryBottomNavigation(
+            LibrarianBottomNavigation(
               selectedIndex: _currentIndex,
               onSelected: _handleNavigation,
             ),

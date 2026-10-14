@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:read_space/main.dart' show AppTheme, AppRoutes;
 import 'package:read_space/widgets/admin_stat_card.dart';
 import 'package:read_space/widgets/overdue_alert_card.dart';
@@ -93,6 +94,21 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                 icon: const Icon(Icons.notifications_outlined),
                 onPressed: () {},
                 color: AppTheme.textPrimary,
+              ),
+              const SizedBox(width: 8),
+              IconButton(
+                icon: const Icon(Icons.logout_outlined),
+                onPressed: () async {
+                  await FirebaseAuth.instance.signOut();
+                  if (mounted) {
+                    Navigator.of(context, rootNavigator: true).pushNamedAndRemoveUntil(
+                      AppRoutes.signup,
+                      (route) => false,
+                    );
+                  }
+                },
+                color: AppTheme.red,
+                tooltip: 'Logout',
               ),
               const SizedBox(width: 8),
               Container(

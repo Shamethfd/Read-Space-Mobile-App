@@ -6,7 +6,7 @@ import '../services/analytics_service.dart';
 import '../models/analytics_data.dart';
 import '../widgets/analytics_metric_card.dart';
 import '../widgets/popular_book_item.dart';
-import '../widgets/library_bottom_navigation.dart';
+import '../widgets/librarian_bottom_navigation.dart';
 
 class LibrarianAnalyticsScreen extends StatefulWidget {
   const LibrarianAnalyticsScreen({super.key});
@@ -87,7 +87,7 @@ class _LibrarianAnalyticsScreenState extends State<LibrarianAnalyticsScreen> {
                 ),
               ),
             ),
-            LibraryBottomNavigation(
+            LibrarianBottomNavigation(
               selectedIndex: 2,
               onSelected: _handleNavigation,
             ),
