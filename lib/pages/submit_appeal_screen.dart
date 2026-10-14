@@ -130,6 +130,8 @@ class _SubmitAppealScreenState extends State<SubmitAppealScreen> {
       final appealId = widget.existingAppeal?.id ??
           DateTime.now().millisecondsSinceEpoch.toString();
 
+      print('📝 Submitting appeal - ID: $appealId, Existing: ${widget.existingAppeal != null}');
+
       // Upload proof image if selected
       if (_proofImage != null) {
         await _uploadProofImage(user.uid, appealId);
@@ -156,9 +158,13 @@ class _SubmitAppealScreenState extends State<SubmitAppealScreen> {
       );
 
       if (widget.existingAppeal != null) {
+        print('✏️ Updating existing appeal');
         await _firestoreService.updateAppeal(appealId, appeal.toJson());
+        print('✅ Appeal updated successfully');
       } else {
+        print('➕ Creating new appeal');
         await _firestoreService.createAppeal(appeal);
+        print('✅ Appeal created successfully');
         
         // Create notification for admins about new appeal
         await _createAdminNotification(appeal);
